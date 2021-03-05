@@ -1,15 +1,14 @@
 import glob
+import logging
 import math
 import os
+import platform
 import random
 import shutil
-import subprocess
 import time
-import logging
 from contextlib import contextmanager
 from copy import copy
 from pathlib import Path
-import platform
 
 import cv2
 import numpy as np
@@ -20,9 +19,10 @@ import yaml
 from scipy.cluster.vq import kmeans
 from scipy.signal import butter, filtfilt
 from tqdm import tqdm
-# import matplotlib.pyplot as plt
 
 from yolov5.utils.torch_utils import init_seeds, is_parallel
+
+# import matplotlib.pyplot as plt
 
 # Set printoptions
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
