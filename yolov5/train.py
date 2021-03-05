@@ -294,55 +294,52 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
         if ema:
             ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
-        if not opt.notest or final_epoch:  # Calculate mAP
-            results, maps, times = test.test(opt.data,
-                                             batch_size=total_batch_size,
-                                             imgsz=imgsz_test,
-                                             model=ema.ema.module if hasattr(ema.ema, 'module') else ema.ema,
-                                             single_cls=opt.single_cls,
-                                             dataloader=testloader,
-                                             save_dir=log_dir)
-            results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
-                              'Recall': str(round(results[1], 2)),
-                              'mAP': str(round(results[2], 2)), 'F1': str(round(results[3], 2))}
-            results_df_2 = pd.DataFrame([results_dict_2])
-            results_table.add_rows(results_df_2)
-            # Write
-            with open(results_file, 'a') as f:
-                f.write(s + '%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
-            if len(opt.name) and opt.bucket:
-                os.system('gsutil cp %s gs://%s/results/results%s.txt' % (results_file, opt.bucket, opt.name))
+        results, maps, times = test.test(opt.data,
+                                         batch_size=total_batch_size,
+                                         imgsz=imgsz_test,
+                                         model=ema.ema.module if hasattr(ema.ema, 'module') else ema.ema,
+                                         single_cls=opt.single_cls,
+                                         dataloader=testloader,
+                                         save_dir=log_dir)
+        results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
+                          'Recall': str(round(results[1], 2)),
+                          'mAP': str(round(results[2], 2)), 'F1': str(round(results[3], 2))}
+        results_df_2 = pd.DataFrame([results_dict_2])
+        results_table.add_rows(results_df_2)
+        # Write
+        with open(results_file, 'a') as f:
+            f.write(s + '%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
+        if len(opt.name) and opt.bucket:
+            os.system('gsutil cp %s gs://%s/results/results%s.txt' % (results_file, opt.bucket, opt.name))
 
-            # Tensorboard
-            if tb_writer:
-                tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',  # train loss
-                        'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95',
-                        'val/giou_loss', 'val/obj_loss', 'val/cls_loss',  # val loss
-                        'x/lr0', 'x/lr1', 'x/lr2']  # params
-                for x, tag in zip(list(mloss[:-1]) + list(results) + lr, tags):
-                    tb_writer.add_scalar(tag, x, epoch)
+        # Tensorboard
+        if tb_writer:
+            tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',  # train loss
+                    'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95',
+                    'val/giou_loss', 'val/obj_loss', 'val/cls_loss',  # val loss
+                    'x/lr0', 'x/lr1', 'x/lr2']  # params
+            for x, tag in zip(list(mloss[:-1]) + list(results) + lr, tags):
+                tb_writer.add_scalar(tag, x, epoch)
 
-            # Update best mAP
-            fi = fitness(np.array(results).reshape(1, -1),
-                         weights=metric_weights)  # fitness_i = weighted combination of [P, R, mAP, F1]
-            if fi > best_fitness:
-                best_fitness = fi
+        # Update best mAP
+        fi = fitness(np.array(results).reshape(1, -1),
+                     weights=metric_weights)  # fitness_i = weighted combination of [P, R, mAP, F1]
+        if fi > best_fitness:
+            best_fitness = fi
 
-            # Save model
-            save = (not opt.nosave) or (final_epoch)
-            if save:
-                with open(results_file, 'r') as f:  # create checkpoint
-                    ckpt = {'epoch': epoch,
-                            'best_fitness': best_fitness,
-                            'training_results': f.read(),
-                            'model': ema.ema.module if hasattr(ema, 'module') else ema.ema,
-                            'optimizer': None if final_epoch else optimizer.state_dict()}
+        # Save model
+        with open(results_file, 'r') as f:  # create checkpoint
+            ckpt = {'epoch': epoch,
+                    'best_fitness': best_fitness,
+                    'training_results': f.read(),
+                    'model': ema.ema.module if hasattr(ema, 'module') else ema.ema,
+                    'optimizer': None if final_epoch else optimizer.state_dict()}
 
-                # Save last, best and delete
-                torch.save(ckpt, last)
-                if best_fitness == fi:
-                    torch.save(ckpt, best)
-                del ckpt
+        # Save last, best and delete
+        torch.save(ckpt, last)
+        if best_fitness == fi:
+            torch.save(ckpt, best)
+        del ckpt
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
 
@@ -374,8 +371,6 @@ if __name__ == '__main__':
     parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='train,test sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
-    parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
-    parser.add_argument('--notest', action='store_true', help='only test final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
