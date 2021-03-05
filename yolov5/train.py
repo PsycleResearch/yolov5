@@ -329,7 +329,7 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
                 best_fitness = fi
 
             # Save model
-            save = (not opt.nosave) or (final_epoch and not opt.evolve)
+            save = (not opt.nosave) or (final_epoch)
             if save:
                 with open(results_file, 'r') as f:  # create checkpoint
                     ckpt = {'epoch': epoch,
@@ -356,8 +356,7 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
             strip_optimizer(f2) if ispt else None  # strip optimizer
             os.system('gsutil cp %s gs://%s/weights' % (f2, opt.bucket)) if opt.bucket and ispt else None  # upload
     # Finish
-    if not opt.evolve:
-        plot_results(save_dir=log_dir)  # save as results.png
+    plot_results(save_dir=log_dir)  # save as results.png
     logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
 
     torch.cuda.empty_cache()
