@@ -240,14 +240,6 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
                     if 'momentum' in x:
                         x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
 
-            # Multi-scale
-            if opt.multi_scale:
-                sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
-                sf = sz / max(imgs.shape[2:])  # scale factor
-                if sf != 1:
-                    ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
-                    imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
-
             # Autocast
             with amp.autocast(enabled=cuda):
                 # Forward
@@ -375,7 +367,6 @@ if __name__ == '__main__':
     parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--multi-scale', action='store_true', help='vary img-size +/- 50%%')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
     parser.add_argument('--sync-bn', action='store_true', help='use SyncBatchNorm, only available in DDP mode')
