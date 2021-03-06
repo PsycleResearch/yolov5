@@ -35,7 +35,7 @@ def test(model,
     niou = iouv.numel()
 
     seen = 0
-    p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
+    # p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     print("VALIDATING")
@@ -50,17 +50,13 @@ def test(model,
         # Disable gradients
         with torch.no_grad():
             # Run model
-            t = time_synchronized()
             inf_out, train_out = model(img, augment=augment)  # inference and training outputs
-            t0 += time_synchronized() - t
 
             # Compute loss
             loss += compute_loss([x.float() for x in train_out], targets, model)[1][:3]  # GIoU, obj, cls
 
             # Run NMS
-            t = time_synchronized()
             output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, merge=merge)
-            t1 += time_synchronized() - t
 
         # Statistics per image
         for si, pred in enumerate(output):
@@ -121,22 +117,21 @@ def test(model,
     p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
     precision = p.mean()
     recall = r.mean()
+    map50 = ap50.mean()
+    map = ap.mean()
     nb_targets = np.bincount(stats[3].astype(np.int64), minlength=nb_classes)  # number of targets per class
 
     # Print results
-    print_scores('all', seen, nb_targets.sum(), precision, recall, ap50.mean(), ap.mean())
+    print_scores('all', seen, nb_targets.sum(), precision, recall, map50, map)
 
     # Print results per class
     if nb_classes > 1 and len(stats):
         for i, c in enumerate(ap_class):
             print_scores(model.classes[c], seen, nb_targets[c], p[i], r[i], ap50[i], ap[i])
 
-    # Print speeds
-    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (img_size, img_size, batch_size)  # tuple
-
     # Return results
     model.float()  # for training
     maps = np.zeros(nb_classes) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    return precision, recall, map50, map

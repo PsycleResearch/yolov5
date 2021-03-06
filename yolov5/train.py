@@ -6,7 +6,6 @@ import random
 import time
 
 import numpy as np
-import pandas as pd
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
@@ -18,27 +17,28 @@ from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     labels_to_class_weights, check_anchors, labels_to_image_weights,
-    compute_loss, fitness, strip_optimizer, get_latest_run)
+    compute_loss, strip_optimizer, get_latest_run)
 from yolov5.utils.torch_utils import init_seeds, intersect_dicts
 
 logger = logging.getLogger(__name__)
+
+
+def fitness(precision, recall, map50, map, metric_weights: list):
+    return np.array([precision, recall, map50, map] * np.array(metric_weights)).sum()
 
 
 def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
           logging_directory='runs/',
           cfg: str = None, resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
           test_list_path='text.txt', classes=[], augment=True):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    is_cuda_available = torch.cuda.is_available()
+    device = torch.device('cuda' if is_cuda_available else 'cpu')
     weights_directory = f'{logging_directory}/weights'
     os.makedirs(weights_directory, exist_ok=True)
     last_weights_directory = weights_directory + '/last.pt'
     best_weights_directory = weights_directory + '/best.pt'
     results_file = f'{logging_directory}/results.txt'
-
-    # Configure
-    cuda = device.type != 'cpu'
     init_seeds(1)
-
     nb_classes = len(classes)
 
     if weights is not None:
@@ -142,12 +142,9 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     t0 = time.time()
     nw = max(3 * nb_batches, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
     maps = np.zeros(nb_classes)  # mAP per class
-    # results = {}
-    # results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
     scheduler.last_epoch = start_epoch - 1  # do not move
-    scaler = amp.GradScaler(enabled=cuda)
+    scaler = amp.GradScaler(enabled=is_cuda_available)
     logger.info('Starting training for %g epochs...' % epochs)
-    results_dict = {'Epoch': '', 'Precision': '', 'Recall': '', 'mAP': '', 'F1': ''}
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
         # Update image weights (optional)
@@ -162,7 +159,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         pbar = tqdm(enumerate(train_dataloader), total=nb_batches)  # progress bar
         optimizer.zero_grad()
 
-        mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
+        mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if is_cuda_available else 0)  # (GB)
         print(f'TRAINING Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}')
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb_batches * epoch  # number integrated batches (since train start)
@@ -179,15 +176,12 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                         x['momentum'] = np.interp(ni, xi, [0.9, hyperparameters['momentum']])
 
             # Autocast
-            with amp.autocast(enabled=cuda):
+            with amp.autocast(enabled=is_cuda_available):
                 # Forward
                 pred = model(imgs)
 
                 # Loss
                 loss, loss_items = compute_loss(pred, targets.to(device), model)  # scaled by batch_size
-                # if not torch.isfinite(loss):
-                #     logger.info('WARNING: non-finite loss, ending training ', loss_items)
-                #     return results
 
             # Backward
             scaler.scale(loss).backward()
@@ -206,25 +200,22 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
         # mAP
         final_epoch = epoch + 1 == epochs
-        results, maps, times = test(
+        test_precision, test_recall, test_mAP50, test_mAP = test(
             model=model,
             batch_size=batch_size,
             img_size=img_size,
             dataloader=test_dataloader,
             save_dir=logging_directory)
-        results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
-                          'Recall': str(round(results[1], 2)),
-                          'mAP': str(round(results[2], 2)), 'F1': str(round(results[3], 2))}
-        results_df_2 = pd.DataFrame([results_dict_2])
+
         # Write
         with open(results_file, 'a') as f:
-            f.write('%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
+            f.write(f'Precision: {test_precision} \tRecall: {test_recall} \tmAP50: {test_mAP50} \tmAP: {test_mAP}')
 
         # Update best mAP
-        fi = fitness(np.array(results).reshape(1, -1),
-                     weights=metric_weights)  # fitness_i = weighted combination of [P, R, mAP, F1]
-        if fi > best_fitness:
-            best_fitness = fi
+        # fitness_i = weighted combination of [P, R, mAP, F1]
+        fitness_i = fitness(test_precision, test_recall, test_mAP50, test_mAP, metric_weights)
+        if fitness_i > best_fitness:
+            best_fitness = fitness_i
 
         # Save model
         with open(results_file, 'r') as f:
@@ -236,7 +227,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
         # Save last, best and delete
         torch.save(checkpoint, last_weights_directory)
-        if best_fitness == fi:
+        if best_fitness == fitness_i:
             torch.save(checkpoint, best_weights_directory)
         del checkpoint
         # end epoch ----------------------------------------------------------------------------------------------------
@@ -254,7 +245,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
 
     torch.cuda.empty_cache()
-    return results
 
 
 if __name__ == '__main__':
@@ -272,6 +262,7 @@ if __name__ == '__main__':
     logging_directory = 'runs/'
     workers = 8
     augment = True
+    metric_weights = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
 
     if resume:
         assert cfg is not None
@@ -287,4 +278,4 @@ if __name__ == '__main__':
     train(hyperparameters, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           img_size=img_size, resume=resume, name=name, logging_directory=logging_directory, workers=workers,
-          augment=augment)
+          augment=augment, metric_weights=metric_weights)
