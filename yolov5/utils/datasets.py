@@ -96,7 +96,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.hyperparameters = hyperparameters
         self.image_weights = image_weights
         self.mosaic = self.hyperparameters['augmentation_mosaic']
-        self.augment_hsv = self.hyperparameters['augment_hsv']
+        self.augment_hsv = self.hyperparameters['augmentation_hsv']
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
 
