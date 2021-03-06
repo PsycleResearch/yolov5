@@ -220,11 +220,8 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         if exponential_moving_average:
             exponential_moving_average.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
-        print(hasattr(exponential_moving_average.ema,'module'))
-        exit()
         results, maps, times = test(
-            model=exponential_moving_average.ema.module if hasattr(exponential_moving_average.ema,
-                                                                   'module') else exponential_moving_average.ema,
+            model=exponential_moving_average.ema,
             batch_size=batch_size,
             img_size=img_size,
             dataloader=test_dataloader,
