@@ -197,7 +197,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
         # Write
         with open(results_file, 'a') as f:
-            f.write(f'EPOCH {epoch} - Precision: {test_precision} \tRecall: {test_recall} \tmAP50: {test_mAP50} \tmAP: {test_mAP}')
+            f.write(f'EPOCH {epoch} - Precision: {test_precision} \tRecall: {test_recall} \tmAP50: {test_mAP50} \tmAP: {test_mAP}\n')
 
         # Update best mAP
         # fitness_i = weighted combination of [P, R, mAP, F1]
