@@ -216,10 +216,12 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             # Print
             mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-            s = ('%10s' * 2 + '%10.4g' * 6) % (
-                '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
-            # pbar.set_description(s)
-            #logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
+            # s = ('%10s' * 2 + '%10.4g' * 6) % (
+            #     '%g/%g' % (, ), , *mloss, targets.shape[0], imgs.shape[-1])
+            pbar.set_description(
+                f'Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}'
+            )
+            # logger.info(('\n' + '%10s' * 8) % ('', '', '', 'obj', 'cls', 'total', 'targets', 'img_size'))
             # end batch ------------------------------------------------------------------------------------------------
 
         # Scheduler
@@ -244,7 +246,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         results_table.add_rows(results_df_2)
         # Write
         with open(results_file, 'a') as f:
-            f.write(s + '%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
+            f.write('%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
 
         # Update best mAP
         fi = fitness(np.array(results).reshape(1, -1),
