@@ -96,6 +96,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.hyperparameters = hyperparameters
         self.image_weights = image_weights
         self.mosaic = self.hyperparameters['augmentation_mosaic']
+        self.augment_hsv = self.hyperparameters['augment_hsv']
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
 
@@ -239,8 +240,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                                                  perspective=hyp['augmentation_perspective_fraction'])
 
             # Augment colorspace
-            augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
-                        value_gain=hyp['augmentation_hsv_value'])
+            if self.augment_hsv:
+                augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
+                            value_gain=hyp['augmentation_hsv_value'])
 
             # Apply cutouts
             # if random.random() < 0.9:

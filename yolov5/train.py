@@ -75,8 +75,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             pg1.append(v)  # apply weight decay
         else:
             pg0.append(v)  # all else
-    print(pg0, pg1, pg2)
-    exit()
 
     optimizer = optim.Adam(pg0, lr=hyperparameters['lr0'], betas=(hyperparameters['beta1'], 0.999))
 
