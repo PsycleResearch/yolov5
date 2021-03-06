@@ -36,7 +36,6 @@ def test(model,
 
     seen = 0
     # p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
-    loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
     print("VALIDATING")
     for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader)):
@@ -51,9 +50,6 @@ def test(model,
         with torch.no_grad():
             # Run model
             inf_out, train_out = model(img, augment=augment)  # inference and training outputs
-
-            # Compute loss
-            loss += compute_loss([x.float() for x in train_out], targets, model)[1][:3]  # GIoU, obj, cls
 
             # Run NMS
             output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, merge=merge)
