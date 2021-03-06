@@ -239,7 +239,8 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             batch_size=batch_size,
             img_size=img_size,
             dataloader=test_dataloader,
-            save_dir=logging_directory)
+            save_dir=logging_directory,
+        verbose=True)
         results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
                           'Recall': str(round(results[1], 2)),
                           'mAP': str(round(results[2], 2)), 'F1': str(round(results[3], 2))}
