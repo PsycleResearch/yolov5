@@ -2,7 +2,6 @@ import json
 import logging
 import math
 import os
-import random
 import time
 
 import numpy as np
@@ -16,8 +15,7 @@ from test import test
 from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
-    labels_to_class_weights, check_anchors, labels_to_image_weights,
-    compute_loss, strip_optimizer, get_latest_run)
+    labels_to_class_weights, check_anchors, compute_loss, strip_optimizer, get_latest_run)
 from yolov5.utils.torch_utils import init_seeds, intersect_dicts
 
 logger = logging.getLogger(__name__)
@@ -66,7 +64,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     hyperparameters['weight_decay'] *= batch_size * accumulate / nominal_batch_size  # scale weight_decay
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
-    print(pg0, pg1, pg2)
     for k, v in model.named_parameters():
         v.requires_grad = True
         if '.bias' in k:
@@ -172,10 +169,10 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             # Autocast
             with amp.autocast(enabled=is_cuda_available):
                 # Forward
-                pred = model(imgs)
+                predictions = model(imgs)
 
                 # Loss
-                loss = compute_loss(pred, targets.to(device), model)
+                loss = compute_loss(predictions, targets.to(device), model)
 
             # Backward
             scaler.scale(loss).backward()
@@ -243,7 +240,7 @@ if __name__ == '__main__':
     cfg = None  # In case we resume
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
-    classes = ['not ok', 'ok']
+    classes = ['copper']
     hyperparameters_path = 'data/hyp.json'
     epochs = 8
     batch_size = 8

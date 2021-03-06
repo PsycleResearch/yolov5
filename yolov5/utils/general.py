@@ -353,10 +353,10 @@ class BCEBlurWithLogitsLoss(nn.Module):
         return loss.mean()
 
 
-def compute_loss(p, targets, model):  # predictions, targets, model
+def compute_loss(predictions, targets, model):
     device = targets.device
     lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
-    tcls, tbox, indices, anchors = build_targets(p, targets, model)  # targets
+    tcls, tbox, indices, anchors = build_targets(predictions, targets, model)  # targets
     hyperparameters = model.hyperparameters
 
     # Define criteria
@@ -367,21 +367,23 @@ def compute_loss(p, targets, model):  # predictions, targets, model
     cp, cn = smooth_BCE(eps=0.0)
 
     # Focal loss
-    g = hyperparameters['focal_loss_gamma']  # focal loss gamma
-    if g > 0:
-        BCEcls, BCEobj = FocalLoss(BCEcls, g), FocalLoss(BCEobj, g)
+    focal_loss_gamma = hyperparameters['focal_loss_gamma']  # focal loss gamma
+    if focal_loss_gamma > 0:
+        BCEcls, BCEobj = FocalLoss(BCEcls, focal_loss_gamma), FocalLoss(BCEobj, focal_loss_gamma)
 
     # Losses
-    nt = 0  # number of targets
-    np = len(p)  # number of outputs
-    balance = [4.0, 1.0, 0.4] if np == 3 else [4.0, 1.0, 0.4, 0.1]  # P3-5 or P3-6
-    for i, pi in enumerate(p):  # layer index, layer predictions
+    nb_targets = 0
+    nb_outputs = len(predictions)
+    print(predictions)
+    exit()
+    balance = [4.0, 1.0, 0.4] if nb_outputs == 3 else [4.0, 1.0, 0.4, 0.1]  # P3-5 or P3-6
+    for i, pi in enumerate(predictions):  # layer index, layer predictions
         b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
         tobj = torch.zeros_like(pi[..., 0], device=device)  # target obj
 
         n = b.shape[0]  # number of targets
         if n:
-            nt += n  # cumulative targets
+            nb_targets += n  # cumulative targets
             ps = pi[b, a, gj, gi]  # prediction subset corresponding to targets
 
             # Regression
@@ -402,9 +404,9 @@ def compute_loss(p, targets, model):  # predictions, targets, model
 
         lobj += BCEobj(pi[..., 4], tobj) * balance[i]  # obj loss
 
-    s = 3 / np  # output count scaling
+    s = 3 / nb_outputs  # output count scaling
     lbox *= hyperparameters['giou_loss_gain'] * s
-    lobj *= hyperparameters['obj_loss_gain'] * s * (1.4 if np == 4 else 1.)
+    lobj *= hyperparameters['obj_loss_gain'] * s * (1.4 if nb_outputs == 4 else 1.)
     lcls *= hyperparameters['cls_loss_gain'] * s
     bs = tobj.shape[0]  # batch size
 
