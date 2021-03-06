@@ -223,7 +223,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         results, maps, times = test(
             model=exponential_moving_average.ema.module if hasattr(exponential_moving_average.ema,
                                                                    'module') else exponential_moving_average.ema,
-            classes=classes,
             batch_size=batch_size,
             img_size=img_size,
             dataloader=test_dataloader,
