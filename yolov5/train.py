@@ -18,7 +18,7 @@ from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     labels_to_class_weights, check_anchors, labels_to_image_weights,
-    compute_loss, plot_images, fitness, strip_optimizer, get_latest_run)
+    compute_loss, fitness, strip_optimizer, get_latest_run)
 from yolov5.utils.torch_utils import init_seeds, ModelEMA, intersect_dicts
 
 logger = logging.getLogger(__name__)
@@ -40,17 +40,19 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     cuda = device.type != 'cpu'
     init_seeds(1)
 
+    nb_classes = len(classes)
+
     if weights is not None:
         # Load pretrained model
         checkpoint = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(checkpoint['model'].yaml, channels=3, nb_classes=len(classes)).to(device)
+        model = Model(checkpoint['model'].yaml, channels=3, nb_classes=nb_classes).to(device)
         exclude = []  # exclude keys
         state_dict = checkpoint['model'].float().state_dict()  # to FP32
-        state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
+        state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
     else:
         # Create model
-        model = Model(cfg, channels=3, nb_classes=len(classes)).to(device)  # create
+        model = Model(cfg, channels=3, nb_classes=nb_classes).to(device)  # create
 
     # Freeze
     freeze = ['', ]  # parameter names to freeze (full or partial)
@@ -133,11 +135,11 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                                            workers=workers)
 
     # Model parameters
-    hyperparameters['cls_loss_gain'] *= len(classes) / 80.  # scale coco-tuned hyp['cls'] to current dataset
-    model.nc = len(classes)  # attach number of classes to model
+    hyperparameters['cls_loss_gain'] *= nb_classes / 80.  # scale coco-tuned hyp['cls'] to current dataset
+    model.nc = nb_classes  # attach number of classes to model
     model.hyp = hyperparameters  # attach hyperparameters to model
     model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
-    model.class_weights = labels_to_class_weights(train_dataset.labels, len(classes)).to(device)  # attach class weights
+    model.class_weights = labels_to_class_weights(train_dataset.labels, nb_classes).to(device)  # attach class weights
     model.names = classes
 
     # Check anchors
@@ -146,7 +148,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     # Start training
     t0 = time.time()
     nw = max(3 * nb_batches, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
-    maps = np.zeros(len(classes))  # mAP per class
+    maps = np.zeros(nb_classes)  # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
@@ -164,7 +166,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         if train_dataset.image_weights:
             # Generate indices
             w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
-            image_weights = labels_to_image_weights(train_dataset.labels, nc=len(classes), class_weights=w)
+            image_weights = labels_to_image_weights(train_dataset.labels, nc=nb_classes, class_weights=w)
             train_dataset.indices = random.choices(range(train_dataset.n), weights=image_weights,
                                                    k=train_dataset.n)  # rand weighted idx
 
@@ -181,7 +183,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             # Warmup
             if ni <= nw:
                 xi = [0, nw]  # x interp
-                # model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
                 accumulate = max(1, np.interp(ni, xi, [1, nominal_batch_size / batch_size]).round())
                 for j, x in enumerate(optimizer.param_groups):
                     # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
