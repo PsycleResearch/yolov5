@@ -395,7 +395,7 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             tobj[b, a, gj, gi] = (1.0 - model.giou_loss_ratio) + model.giou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
 
             # Classification
-            if model.nc > 1:  # cls loss (only if multiple classes)
+            if model.nb_classes > 1:  # cls loss (only if multiple classes)
                 t = torch.full_like(ps[:, 5:], cn, device=device)  # targets
                 t[range(n), tcls[i]] = cp
                 lcls += BCEcls(ps[:, 5:], t)  # BCE
