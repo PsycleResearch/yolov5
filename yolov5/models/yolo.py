@@ -63,7 +63,11 @@ class Model(nn.Module):
         super(Model, self).__init__()
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
+            print("DICT")
+            exit()
         else:  # is *.yaml
+            print("YAML")
+            exit()
             import yaml  # for torch hub
             self.yaml_file = Path(cfg).name
             with open(cfg) as f:
