@@ -340,7 +340,7 @@ if __name__ == '__main__':
     data = 'dataset.yaml'
     hyp = ''
     epochs = 8
-    batch_size = 8
+    batch_size = 16
     img_size = [640, 640]
     resume = False
     name = ''
@@ -391,4 +391,5 @@ if __name__ == '__main__':
     logger.info('Start Tensorboard with "tensorboard --logdir %s", view at http://localhost:6006/' % logdir)
     tb_writer = SummaryWriter(log_dir=increment_dir(Path(logdir) / 'exp', name))  # runs/exp
 
-    train(hyp, device, weights, tb_writer=tb_writer)
+    train(hyp, device, weights, tb_writer=tb_writer, cfg=cfg, data=data, epochs=epochs, batch_size=batch_size,
+          img_size=img_size, resume=resume, name=name, logdir=logdir, workers=workers)
