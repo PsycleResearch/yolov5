@@ -18,7 +18,6 @@ def test(model,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
          augment=False,
-         verbose=False,
          dataloader=None,
          save_dir='',
          merge=False):
@@ -131,10 +130,11 @@ def test(model,
 
     # Print results
     pf = '%20s' + '%12.3g' * 6  # print format
-    print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+    # print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+    print(f'Class: all / Images: {seen} / Target: {nt.sum()} / Precision: {mp}, / Recall: {mr} / mAP@.5: {map50} / mAP@.5:.95: {map}')
 
     # Print results per class
-    if verbose and nc > 1 and len(stats):
+    if nc > 1 and len(stats):
         for i, c in enumerate(ap_class):
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
