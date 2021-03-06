@@ -399,11 +399,11 @@ def load_mosaic(self, index):
     # Augment
     # img4 = img4[s // 2: int(s * 1.5), s // 2:int(s * 1.5)]  # center crop (WARNING, requires box pruning)
     img4, labels4 = random_perspective(img4, labels4,
-                                       degrees=self.hyperparameters['degrees'],
-                                       translate=self.hyperparameters['translate'],
-                                       scale=self.hyperparameters['scale'],
-                                       shear=self.hyperparameters['shear'],
-                                       perspective=self.hyperparameters['perspective'],
+                                       degrees=self.hyperparameters['augmentation_rotation_degrees'],
+                                       translate=self.hyperparameters['augmentation_translation_fraction'],
+                                       scale=self.hyperparameters['augmentation_scale_gain'],
+                                       shear=self.hyperparameters['augmentation_shear_degrees'],
+                                       perspective=self.hyperparameters['augmentation_perspective_fraction'],
                                        border=self.mosaic_border)  # border to remove
 
     return img4, labels4
