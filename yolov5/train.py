@@ -218,11 +218,8 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
             s = ('%10s' * 2 + '%10.4g' * 6) % (
                 '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
-            pbar.set_description(s)
-            # Plot
-            if ni < 3:
-                result = plot_images(images=imgs, targets=targets, paths=paths,
-                                     fname=f'{logging_directory}/train_batch{ni}.jpg')
+            # pbar.set_description(s)
+            #logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
             # end batch ------------------------------------------------------------------------------------------------
 
         # Scheduler

@@ -14,9 +14,6 @@ from tqdm import tqdm
 
 from yolov5.utils.torch_utils import is_parallel
 
-# import matplotlib.pyplot as plt
-
-# Set printoptions
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
 
