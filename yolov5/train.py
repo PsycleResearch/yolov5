@@ -44,6 +44,11 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     if weights is not None:
         # Load pretrained model
         checkpoint = torch.load(weights, map_location=device)  # load checkpoint
+        print(checkpoint['model'])
+        print("++++++++++++++")
+        print(checkpoint['model'].yaml)
+        print("++++++++++++++")
+        print(checkpoint['model'].float().state_dict())
         model = Model(checkpoint['model'].yaml, channels=3, nb_classes=nb_classes).to(device)
         state_dict = checkpoint['model'].float().state_dict()  # to FP32
         state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
