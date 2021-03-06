@@ -53,7 +53,6 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                       augment=augment,  # augment images
                                       hyp=hyp,  # augmentation hyperparameters
-                                      single_cls=opt.single_cls,
                                       stride=int(stride))
 
     batch_size = min(batch_size, len(dataset))
@@ -70,7 +69,7 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, image_weights=False,
-                 single_cls=False, stride=32):
+                 stride=32):
         try:
             f = []  # image files
             for p in path if isinstance(path, list) else [path]:
@@ -138,8 +137,6 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 assert (l[:, 1:] <= 1).all(), 'non-normalized or out of bounds coordinate labels: %s' % file
                 if np.unique(l, axis=0).shape[0] < l.shape[0]:  # duplicate rows
                     nd += 1  # print('WARNING: duplicate rows in %s' % self.label_files[i])  # duplicate rows
-                if single_cls:
-                    l[:, 0] = 0  # force dataset into single-class mode
                 self.labels[i] = l
                 nf += 1  # file found
 
