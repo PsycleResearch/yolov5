@@ -5,7 +5,7 @@ import torch
 from tqdm import tqdm
 
 from yolov5.utils.general import (
-    coco80_to_coco91_class, compute_loss, non_max_suppression, clip_coords, plot_images, xywh2xyxy, box_iou,
+    compute_loss, non_max_suppression, clip_coords, plot_images, xywh2xyxy, box_iou,
     output_to_target, ap_per_class, print_scores)
 from yolov5.utils.torch_utils import time_synchronized
 

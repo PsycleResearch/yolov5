@@ -173,7 +173,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         optimizer.zero_grad()
 
         mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
-        print(f'Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}')
+        print(f'TRAINING Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}')
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb_batches * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
