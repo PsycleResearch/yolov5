@@ -5,9 +5,8 @@ import torch
 from tqdm import tqdm
 
 from yolov5.utils.general import (
-    compute_loss, non_max_suppression, clip_coords, plot_images, xywh2xyxy, box_iou,
+    non_max_suppression, clip_coords, plot_images, xywh2xyxy, box_iou,
     output_to_target, ap_per_class, print_scores)
-from yolov5.utils.torch_utils import time_synchronized
 
 
 def test(model,
@@ -16,7 +15,8 @@ def test(model,
          augment=False,
          dataloader=None,
          save_dir='',
-         merge=False):
+         merge=False,
+         results_file=None):
     # Initialize/load model and set device
     device = next(model.parameters()).device  # get model device
 
@@ -127,4 +127,5 @@ def test(model,
     maps = np.zeros(nb_classes) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
+
     return precision, recall, map50, map
