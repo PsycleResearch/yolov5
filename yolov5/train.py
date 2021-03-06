@@ -3,7 +3,7 @@ import logging
 import math
 import os
 import random
-import test  # import test.py to get mAP after each epoch
+from test import test
 import time
 from pathlib import Path
 
@@ -19,7 +19,7 @@ from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     labels_to_class_weights, check_anchors, labels_to_image_weights,
-    compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run, check_img_size)
+    compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run)
 from yolov5.utils.torch_utils import init_seeds, ModelEMA, intersect_dicts
 
 logger = logging.getLogger(__name__)
@@ -232,15 +232,13 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
             # end batch ------------------------------------------------------------------------------------------------
 
         # Scheduler
-        lr = [x['lr'] for x in optimizer.param_groups]  # for tensorboard
         scheduler.step()
 
-        # DDP process 0 or single-GPU
         # mAP
         if exponential_moving_average:
             exponential_moving_average.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
-        results, maps, times = test.test(
+        results, maps, times = test(
             model=exponential_moving_average.ema.module if hasattr(exponential_moving_average.ema,
                                                                    'module') else exponential_moving_average.ema,
             classes=classes,
@@ -256,15 +254,6 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
         # Write
         with open(results_file, 'a') as f:
             f.write(s + '%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
-
-        # Tensorboard
-        if tb_writer:
-            tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',  # train loss
-                    'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95',
-                    'val/giou_loss', 'val/obj_loss', 'val/cls_loss',  # val loss
-                    'x/lr0', 'x/lr1', 'x/lr2']  # params
-            for x, tag in zip(list(mloss[:-1]) + list(results) + lr, tags):
-                tb_writer.add_scalar(tag, x, epoch)
 
         # Update best mAP
         fi = fitness(np.array(results).reshape(1, -1),
