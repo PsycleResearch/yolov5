@@ -24,6 +24,12 @@ np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format}) 
 cv2.setNumThreads(0)
 
 
+def print_scores(class_name, nb_images, nb_targets, precision, recall, map50, map):
+    print(
+        f'Class: {class_name} / Images: {nb_images} / Target: {nb_targets} / Precision: {precision:.3f}, '
+        f'/ Recall: {recall:.3f} / mAP@.5: {map50:.3f} / mAP@.5:.95: {map:.3f}')
+
+
 def get_latest_run(search_dir='./runs'):
     # Return path to most recent 'last.pt' in /runs (i.e. to --resume from)
     last_list = glob.glob(f'{search_dir}/**/last*.pt', recursive=True)

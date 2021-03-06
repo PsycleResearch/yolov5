@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from yolov5.utils.general import (
     coco80_to_coco91_class, compute_loss, non_max_suppression, clip_coords, plot_images, xywh2xyxy, box_iou,
-    output_to_target, ap_per_class)
+    output_to_target, ap_per_class, print_scores)
 from yolov5.utils.torch_utils import time_synchronized
 
 
@@ -31,7 +31,7 @@ def test(model,
 
     # Configure
     model.eval()
-    nc = len(classes)
+    nb_classes = len(classes)
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
 
@@ -120,30 +120,26 @@ def test(model,
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
-    if len(stats) and stats[0].any():
-        p, r, ap, f1, ap_class = ap_per_class(*stats)
-        p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-        mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-        nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
-    else:
-        nt = torch.zeros(1)
+    p, r, ap, f1, ap_class = ap_per_class(*stats)
+    p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
+    precision = p.mean()
+    recall = r.mean()
+    nb_targets = np.bincount(stats[3].astype(np.int64), minlength=nb_classes)  # number of targets per class
 
     # Print results
-    pf = '%20s' + '%12.3g' * 6  # print format
-    # print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
-    print(f'Class: all / Images: {seen} / Target: {nt.sum()} / Precision: {mp}, / Recall: {mr} / mAP@.5: {map50} / mAP@.5:.95: {map}')
+    print_scores('all', seen, nb_targets.sum(), precision, recall, ap50.mean(), ap.mean())
 
     # Print results per class
-    if nc > 1 and len(stats):
+    if nb_classes > 1 and len(stats):
         for i, c in enumerate(ap_class):
-            print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
+            print_scores(names[c], seen, nb_targets[c], precision[i], recall[i], ap50[i], ap[i])
 
     # Print speeds
     t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (img_size, img_size, batch_size)  # tuple
 
     # Return results
     model.float()  # for training
-    maps = np.zeros(nc) + map
+    maps = np.zeros(nb_classes) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
