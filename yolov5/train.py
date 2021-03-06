@@ -151,7 +151,7 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
 
     # Trainloader
     dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
-                                            hyp=hyp, augment=True, cache=opt.cache_images, rank=-1,
+                                            hyp=hyp, augment=True,
                                             world_size=opt.world_size, workers=opt.workers)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
@@ -160,7 +160,7 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
     # Testloader
     ema.updates = start_epoch * nb // accumulate  # set EMA updates
     testloader = create_dataloader(test_path, imgsz_test, total_batch_size, gs, opt,
-                                   hyp=hyp, augment=False, cache=opt.cache_images, rank=-1,
+                                   hyp=hyp, augment=False,
                                    world_size=opt.world_size, workers=opt.workers)[0]  # only runs on process 0
 
     # Model parameters
@@ -362,7 +362,6 @@ if __name__ == '__main__':
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
-    parser.add_argument('--cache-images', action='store_true', help='cache images for faster training')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')

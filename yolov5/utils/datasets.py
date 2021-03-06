@@ -46,22 +46,22 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0,
-                      rank=-1, world_size=1, workers=8):
+def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, pad=0.0,
+                      world_size=1, workers=8):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
-    with torch_distributed_zero_first(rank):
+    with torch_distributed_zero_first(-1):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                       augment=augment,  # augment images
                                       hyp=hyp,  # augmentation hyperparameters
-                                      cache_images=cache,
+                                      cache_images=True,
                                       single_cls=opt.single_cls,
                                       stride=int(stride),
                                       pad=pad,
-                                      rank=rank)
+                                      rank=-1)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
-    train_sampler = torch.utils.data.distributed.DistributedSampler(dataset) if rank != -1 else None
+    train_sampler = None
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
                                              num_workers=nw,
@@ -69,8 +69,6 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                              pin_memory=True,
                                              collate_fn=LoadImagesAndLabels.collate_fn)
     return dataloader, dataset
-
-
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
@@ -425,7 +423,6 @@ def load_mosaic(self, index):
                                        border=self.mosaic_border)  # border to remove
 
     return img4, labels4
-
 
 
 def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
