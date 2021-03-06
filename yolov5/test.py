@@ -18,7 +18,7 @@ def test(model,
          classes=[],
          weights=None,
          batch_size=16,
-         imgsz=640,
+         img_size=640,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
          save_json=False,
@@ -158,7 +158,7 @@ def test(model,
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     # Print speeds
-    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz, imgsz, batch_size)  # tuple
+    t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (img_size, img_size, batch_size)  # tuple
 
     # Save JSON
     if save_json and len(jdict):

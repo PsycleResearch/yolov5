@@ -3,9 +3,7 @@ import math
 import os
 import random
 import shutil
-import time
 from pathlib import Path
-from threading import Thread
 
 import cv2
 import numpy as np
@@ -14,7 +12,7 @@ from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from yolov5.utils.general import xyxy2xywh, xywh2xyxy, torch_distributed_zero_first
+from yolov5.utils.general import xyxy2xywh, xywh2xyxy
 
 help_url = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
 img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.dng']
@@ -46,13 +44,12 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, hyp=None, augment=False, workers=8):
+def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
-    with torch_distributed_zero_first(-1):
-        dataset = LoadImagesAndLabels(path, imgsz, batch_size,
-                                      augment=augment,  # augment images
-                                      hyp=hyp,  # augmentation hyperparameters
-                                      stride=int(stride))
+    dataset = LoadImagesAndLabels(path, imgsz, batch_size,
+                                  augment=augment,  # augment images
+                                  hyperparameters=hyperparameters,  # augmentation hyperparameters
+                                  stride=int(stride))
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -67,7 +64,7 @@ def create_dataloader(path, imgsz, batch_size, stride, hyp=None, augment=False, 
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
-    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, image_weights=False,
+    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None, image_weights=False,
                  stride=32):
         try:
             f = []  # image files
@@ -95,7 +92,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.batch = bi  # batch index of image
         self.img_size = img_size
         self.augment = augment
-        self.hyp = hyp
+        self.hyp = hyperparameters
         self.image_weights = image_weights
         self.mosaic = self.augment  # load 4 images at a time into a mosaic (only during training)
         self.mosaic_border = [-img_size // 2, -img_size // 2]

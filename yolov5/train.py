@@ -1,3 +1,4 @@
+import json
 import logging
 import math
 import os
@@ -11,55 +12,46 @@ import pandas as pd
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
-import yaml
 from torch.cuda import amp
 from tqdm import tqdm
 
 from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
-    torch_distributed_zero_first, labels_to_class_weights, plot_labels, check_anchors, labels_to_image_weights,
+    labels_to_class_weights, check_anchors, labels_to_image_weights,
     compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run, check_img_size)
-from yolov5.utils.google_utils import attempt_download
 from yolov5.utils.torch_utils import init_seeds, ModelEMA, intersect_dicts
 
 logger = logging.getLogger(__name__)
 import streamlit as st
 
 
-def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, batch_size=1, logdir='runs/',
-          cfg='', resume=False, img_size=[640, 640], workers=8, name='', train_list_path='train.txt',
+def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights=None, epochs=2, batch_size=1,
+          logdir='runs/',
+          cfg='', resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
           test_list_path='text.txt', classes=[]):
-    logger.info(f'Hyperparameters {hyp}')
-    log_dir = Path(tb_writer.log_dir) if tb_writer else Path(logdir) / 'evolve'  # logging directory
+    log_dir = Path(logdir) / 'evolve'  # logging directory
     wdir = str(log_dir / 'weights') + os.sep  # weights directory
     os.makedirs(wdir, exist_ok=True)
     last = wdir + 'last.pt'
     best = wdir + 'best.pt'
     results_file = str(log_dir / 'results.txt')
 
-    # Save run settings
-    with open(log_dir / 'hyp.yaml', 'w') as f:
-        yaml.dump(hyp, f, sort_keys=False)
-
     # Configure
     cuda = device.type != 'cpu'
     init_seeds(1)
 
-    # Model
-    pretrained = weights.endswith('.pt')
-    if pretrained:
-        with torch_distributed_zero_first(-1):
-            attempt_download(weights)  # download if not found locally
-        ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(cfg or ckpt['model'].yaml, ch=3, nc=len(classes)).to(device)  # create
-        exclude = ['anchor'] if cfg else []  # exclude keys
-        state_dict = ckpt['model'].float().state_dict()  # to FP32
+    if weights is not None:
+        # Load pretrained model
+        checkpoint = torch.load(weights, map_location=device)  # load checkpoint
+        model = Model(checkpoint['model'].yaml, channels=3, nb_classes=len(classes)).to(device)
+        exclude = []  # exclude keys
+        state_dict = checkpoint['model'].float().state_dict()  # to FP32
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
-        logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
-        model = Model(cfg, ch=3, nc=len(classes)).to(device)  # create
+        # Create model
+        model = Model(cfg, channels=3, nb_classes=len(classes)).to(device)  # create
 
     # Freeze
     freeze = ['', ]  # parameter names to freeze (full or partial)
@@ -70,9 +62,9 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
                 v.requires_grad = False
 
     # Optimizer
-    nbs = 64  # nominal batch size
-    accumulate = max(round(nbs / batch_size), 1)  # accumulate loss before optimizing
-    hyp['weight_decay'] *= batch_size * accumulate / nbs  # scale weight_decay
+    nominal_batch_size = 64
+    accumulate = max(round(nominal_batch_size / batch_size), 1)  # accumulate loss before optimizing
+    hyperparameters['weight_decay'] *= batch_size * accumulate / nominal_batch_size  # scale weight_decay
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
     for k, v in model.named_parameters():
@@ -84,97 +76,77 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
         else:
             pg0.append(v)  # all else
 
-    optimizer = optim.Adam(pg0, lr=hyp['lr0'], betas=(hyp['momentum'], 0.999))  # adjust beta1 to momentum
-    # optimizer = optim.SGD(pg0, lr=hyp['lr0'], momentum=hyp['momentum'], nesterov=True)
+    optimizer = optim.Adam(pg0, lr=hyperparameters['lr0'], betas=(hyperparameters['beta1'], 0.999))
 
-    optimizer.add_param_group({'params': pg1, 'weight_decay': hyp['weight_decay']})  # add pg1 with weight_decay
+    optimizer.add_param_group(
+        {'params': pg1, 'weight_decay': hyperparameters['weight_decay']})  # add pg1 with weight_decay
     optimizer.add_param_group({'params': pg2})  # add pg2 (biases)
-    logger.info('Optimizer groups: %g .bias, %g conv.weight, %g other' % (len(pg2), len(pg1), len(pg0)))
     del pg0, pg1, pg2
 
-    # Scheduler https://arxiv.org/pdf/1812.01187.pdf
-    # https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#OneCycleLR
     lf = lambda x: (((1 + math.cos(x * math.pi / epochs)) / 2) ** 1.0) * 0.8 + 0.2  # cosine
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
-    # plot_lr_scheduler(optimizer, scheduler, epochs)
 
     # Resume
     start_epoch, best_fitness = 0, 0.0
-    if pretrained:
+    if weights is not None:
         # Optimizer
-        if ckpt['optimizer'] is not None:
-            optimizer.load_state_dict(ckpt['optimizer'])
-            best_fitness = ckpt['best_fitness']
+        if checkpoint['optimizer'] is not None:
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            best_fitness = checkpoint['best_fitness']
 
         # Results
-        if ckpt.get('training_results') is not None:
+        if checkpoint.get('training_results') is not None:
             with open(results_file, 'w') as file:
-                file.write(ckpt['training_results'])  # write results.txt
+                file.write(checkpoint['training_results'])  # write results.txt
 
         # Epochs
-        start_epoch = ckpt['epoch'] + 1
+        start_epoch = checkpoint['epoch'] + 1
         if resume:
             assert start_epoch > 0, '%s training to %g epochs is finished, nothing to resume.' % (weights, epochs)
         if epochs < start_epoch:
             logger.info('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
-                        (weights, ckpt['epoch'], epochs))
-            epochs += ckpt['epoch']  # finetune additional epochs
+                        (weights, checkpoint['epoch'], epochs))
+            epochs += checkpoint['epoch']  # finetune additional epochs
 
-        del ckpt, state_dict
+        del checkpoint, state_dict
 
     # Image sizes
-    gs = int(max(model.stride))  # grid size (max stride)
-    imgsz, imgsz_test = [check_img_size(x, gs) for x in img_size]  # verify imgsz are gs-multiples
-
-    # DP mode
-    if cuda and torch.cuda.device_count() > 1:
-        model = torch.nn.DataParallel(model)
+    grid_size = int(max(model.stride))  # max stride
+    assert img_size == math.ceil(img_size / grid_size) * grid_size, f'img_size ({img_size}) must be a multiple of max stride ({grid_size})'
 
     # Exponential moving average
-    ema = ModelEMA(model)
+    exponential_moving_average = ModelEMA(model)
 
     # Trainloader
-    dataloader, dataset = create_dataloader(train_list_path, imgsz, batch_size, gs, hyp=hyp, augment=True,
-                                            workers=workers)
-    mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
-    nb = len(dataloader)  # number of batches
+    train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size, hyperparameters=hyperparameters,
+                                                        augment=True,
+                                                        workers=workers)
+    nb = len(train_dataloader)  # number of batches
 
     # Testloader
-    ema.updates = start_epoch * nb // accumulate  # set EMA updates
-    testloader = create_dataloader(test_list_path, imgsz_test, batch_size, gs, hyp=hyp, augment=False, workers=workers)[
-        0]  # only runs on process 0
+    exponential_moving_average.updates = start_epoch * nb // accumulate  # set EMA updates
+    test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size, hyperparameters=hyperparameters,
+                                           augment=False,
+                                           workers=workers)
 
     # Model parameters
-    hyp['cls'] *= len(classes) / 80.  # scale coco-tuned hyp['cls'] to current dataset
+    hyperparameters['cls_loss_gain'] *= len(classes) / 80.  # scale coco-tuned hyp['cls'] to current dataset
     model.nc = len(classes)  # attach number of classes to model
-    model.hyp = hyp  # attach hyperparameters to model
+    model.hyp = hyperparameters  # attach hyperparameters to model
     model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
-    model.class_weights = labels_to_class_weights(dataset.labels, len(classes)).to(device)  # attach class weights
+    model.class_weights = labels_to_class_weights(train_dataset.labels, len(classes)).to(device)  # attach class weights
     model.names = classes
 
-    # Class frequency
-    labels = np.concatenate(dataset.labels, 0)
-    c = torch.tensor(labels[:, 0])  # classes
-    # cf = torch.bincount(c.long(), minlength=nc) + 1.
-    # model._initialize_biases(cf.to(device))
-    plot_labels(labels, save_dir=log_dir)
-    if tb_writer:
-        # tb_writer.add_hparams(hyp, {})  # causes duplicate https://github.com/ultralytics/yolov5/pull/384
-        tb_writer.add_histogram('classes', c, 0)
-
     # Check anchors
-    check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
+    check_anchors(train_dataset, model=model, thr=hyperparameters['anchor_multiple_threshold'], img_size=img_size)
 
     # Start training
     t0 = time.time()
     nw = max(3 * nb, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
-    # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
     maps = np.zeros(len(classes))  # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
-    logger.info('Image sizes %g train, %g test' % (imgsz, imgsz_test))
-    logger.info('Using %g dataloader workers' % dataloader.num_workers)
     logger.info('Starting training for %g epochs...' % epochs)
     # torch.autograd.set_detect_anomaly(True)
     my_bar = st.progress(0)
@@ -187,19 +159,19 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
         if epoch == epochs - 1:
             my_bar.progress(100)
         # Update image weights (optional)
-        if dataset.image_weights:
+        if train_dataset.image_weights:
             # Generate indices
             w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
-            image_weights = labels_to_image_weights(dataset.labels, nc=len(classes), class_weights=w)
-            dataset.indices = random.choices(range(dataset.n), weights=image_weights,
-                                             k=dataset.n)  # rand weighted idx
+            image_weights = labels_to_image_weights(train_dataset.labels, nc=len(classes), class_weights=w)
+            train_dataset.indices = random.choices(range(train_dataset.n), weights=image_weights,
+                                                   k=train_dataset.n)  # rand weighted idx
 
         # Update mosaic border
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
         mloss = torch.zeros(4, device=device)  # mean losses
-        pbar = enumerate(dataloader)
+        pbar = enumerate(train_dataloader)
         logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
         pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
@@ -211,12 +183,12 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
             if ni <= nw:
                 xi = [0, nw]  # x interp
                 # model.gr = np.interp(ni, xi, [0.0, 1.0])  # giou loss ratio (obj_loss = 1.0 or giou)
-                accumulate = max(1, np.interp(ni, xi, [1, nbs / batch_size]).round())
+                accumulate = max(1, np.interp(ni, xi, [1, nominal_batch_size / batch_size]).round())
                 for j, x in enumerate(optimizer.param_groups):
                     # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
                     x['lr'] = np.interp(ni, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
                     if 'momentum' in x:
-                        x['momentum'] = np.interp(ni, xi, [0.9, hyp['momentum']])
+                        x['momentum'] = np.interp(ni, xi, [0.9, hyperparameters['momentum']])
 
             # Autocast
             with amp.autocast(enabled=cuda):
@@ -237,8 +209,8 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
                 scaler.step(optimizer)  # optimizer.step
                 scaler.update()
                 optimizer.zero_grad()
-                if ema:
-                    ema.update(model)
+                if exponential_moving_average:
+                    exponential_moving_average.update(model)
             # Print
             mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
@@ -261,15 +233,17 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
 
         # DDP process 0 or single-GPU
         # mAP
-        if ema:
-            ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
+        if exponential_moving_average:
+            exponential_moving_average.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
-        results, maps, times = test.test(model=ema.ema.module if hasattr(ema.ema, 'module') else ema.ema,
-                                         classes=classes,
-                                         batch_size=batch_size,
-                                         imgsz=imgsz_test,
-                                         dataloader=testloader,
-                                         save_dir=log_dir)
+        results, maps, times = test.test(
+            model=exponential_moving_average.ema.module if hasattr(exponential_moving_average.ema,
+                                                                   'module') else exponential_moving_average.ema,
+            classes=classes,
+            batch_size=batch_size,
+            imgsz=img_size,
+            dataloader=test_dataloader,
+            save_dir=log_dir)
         results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
                           'Recall': str(round(results[1], 2)),
                           'mAP': str(round(results[2], 2)), 'F1': str(round(results[3], 2))}
@@ -296,17 +270,18 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
 
         # Save model
         with open(results_file, 'r') as f:  # create checkpoint
-            ckpt = {'epoch': epoch,
-                    'best_fitness': best_fitness,
-                    'training_results': f.read(),
-                    'model': ema.ema.module if hasattr(ema, 'module') else ema.ema,
-                    'optimizer': None if final_epoch else optimizer.state_dict()}
+            checkpoint = {'epoch': epoch,
+                          'best_fitness': best_fitness,
+                          'training_results': f.read(),
+                          'model': exponential_moving_average.ema.module if hasattr(exponential_moving_average,
+                                                                                    'module') else exponential_moving_average.ema,
+                          'optimizer': None if final_epoch else optimizer.state_dict()}
 
         # Save last, best and delete
-        torch.save(ckpt, last)
+        torch.save(checkpoint, last)
         if best_fitness == fi:
-            torch.save(ckpt, best)
-        del ckpt
+            torch.save(checkpoint, best)
+        del checkpoint
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
 
@@ -332,27 +307,25 @@ if __name__ == '__main__':
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
     classes = ['not ok', 'ok']
-    hyp = 'data/hyp.yaml'
+    hyperparameters_path = 'data/hyp.json'
     epochs = 8
     batch_size = 8
-    img_size = [640, 640]
+    img_size = 640
     resume = False
     name = ''
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logdir = 'runs/'
     workers = 8
     assert cfg is not None or weights is not None
-    # either cfg or weights must be specified
 
-    # Resume
-    if resume:  # resume an interrupted run
+    if resume:
         checkpoint = resume if isinstance(resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(checkpoint), 'ERROR: --resume checkpoint does not exist'
         cfg, weights, resume = '', checkpoint, True
 
-    with open(hyp) as f:
-        hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
+    with open(hyperparameters_path) as f:
+        hyperparameters = json.load(f)
 
-    train(hyp, device, weights, cfg=cfg, train_list_path=train_list_path,
+    train(hyperparameters, device, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           img_size=img_size, resume=resume, name=name, logdir=logdir, workers=workers)
