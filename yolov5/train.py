@@ -59,7 +59,7 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
     test_path = data_dict['val']
-    nc, names = (1, ['item']) if opt.single_cls else (int(data_dict['nc']), data_dict['names'])  # number classes, names
+    nc, names = (int(data_dict['nc']), data_dict['names'])  # number classes, names
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
 
     # Model
@@ -182,8 +182,7 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
         tb_writer.add_histogram('classes', c, 0)
 
     # Check anchors
-    if not opt.noautoanchor:
-        check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
+    check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
 
     # Start training
     t0 = time.time()
@@ -288,7 +287,6 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
                                          batch_size=total_batch_size,
                                          imgsz=imgsz_test,
                                          model=ema.ema.module if hasattr(ema.ema, 'module') else ema.ema,
-                                         single_cls=opt.single_cls,
                                          dataloader=testloader,
                                          save_dir=log_dir)
         results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
@@ -299,8 +297,6 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
         # Write
         with open(results_file, 'a') as f:
             f.write(s + '%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
-        if len(opt.name) and opt.bucket:
-            os.system('gsutil cp %s gs://%s/results/results%s.txt' % (results_file, opt.bucket, opt.name))
 
         # Tensorboard
         if tb_writer:
@@ -341,7 +337,6 @@ def train(hyp, opt, device, tb_writer=None, metric_weights=None):
             os.rename(f1, f2)  # rename
             ispt = f2.endswith('.pt')  # is *.pt
             strip_optimizer(f2) if ispt else None  # strip optimizer
-            os.system('gsutil cp %s gs://%s/weights' % (f2, opt.bucket)) if opt.bucket and ispt else None  # upload
     # Finish
     plot_results(save_dir=log_dir)  # save as results.png
     logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
@@ -360,12 +355,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='train,test sizes')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
-    parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
-    parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
-    parser.add_argument('--sync-bn', action='store_true', help='use SyncBatchNorm, only available in DDP mode')
     parser.add_argument('--logdir', type=str, default='runs/', help='logging directory')
     parser.add_argument('--workers', type=int, default=8, help='maximum number of dataloader workers')
     opt = parser.parse_args()

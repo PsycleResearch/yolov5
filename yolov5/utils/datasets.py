@@ -46,7 +46,7 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, pad=0.0,
+def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False,
                       world_size=1, workers=8):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
     with torch_distributed_zero_first(-1):
