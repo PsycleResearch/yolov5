@@ -20,8 +20,8 @@ from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     torch_distributed_zero_first, labels_to_class_weights, plot_labels, check_anchors, labels_to_image_weights,
-    compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run, check_dataset, check_file,
-    check_img_size, increment_dir, set_logging)
+    compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run, check_dataset, check_img_size,
+    increment_dir)
 from yolov5.utils.google_utils import attempt_download
 from yolov5.utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
 
@@ -30,7 +30,8 @@ import streamlit as st
 
 
 def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, batch_size=1, logdir='runs/',
-          data='dataset.yaml', cfg='', resume=False, img_size=[640, 640], workers=8, name=''):
+          cfg='', resume=False, img_size=[640, 640], workers=8, name='', train_list_path='train.txt',
+          test_list_path='text.txt', classes=[]):
     logger.info(f'Hyperparameters {hyp}')
     log_dir = Path(tb_writer.log_dir) if tb_writer else Path(logdir) / 'evolve'  # logging directory
     wdir = str(log_dir / 'weights') + os.sep  # weights directory
@@ -46,14 +47,6 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
     # Configure
     cuda = device.type != 'cpu'
     init_seeds(1)
-    with open(data) as f:
-        data_dict = yaml.load(f, Loader=yaml.FullLoader)  # model dict
-    with torch_distributed_zero_first(-1):
-        check_dataset(data_dict)  # check
-    train_path = data_dict['train']
-    test_path = data_dict['val']
-    nc, names = (int(data_dict['nc']), data_dict['names'])  # number classes, names
-    assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, data)  # check
 
     # Model
     pretrained = weights.endswith('.pt')
@@ -61,14 +54,14 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
         with torch_distributed_zero_first(-1):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(cfg or ckpt['model'].yaml, ch=3, nc=nc).to(device)  # create
+        model = Model(cfg or ckpt['model'].yaml, ch=3, nc=len(classes)).to(device)  # create
         exclude = ['anchor'] if cfg else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
-        model = Model(cfg, ch=3, nc=nc).to(device)  # create
+        model = Model(cfg, ch=3, nc=len(classes)).to(device)  # create
 
     # Freeze
     freeze = ['', ]  # parameter names to freeze (full or partial)
@@ -143,22 +136,23 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
     ema = ModelEMA(model)
 
     # Trainloader
-    dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, hyp=hyp, augment=True, workers=workers)
+    dataloader, dataset = create_dataloader(train_list_path, imgsz, batch_size, gs, hyp=hyp, augment=True,
+                                            workers=workers)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
-    assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, nc, data, nc - 1)
 
     # Testloader
     ema.updates = start_epoch * nb // accumulate  # set EMA updates
-    testloader = create_dataloader(test_path, imgsz_test, batch_size, gs, hyp=hyp, augment=False, workers=workers)[0]  # only runs on process 0
+    testloader = create_dataloader(test_list_path, imgsz_test, batch_size, gs, hyp=hyp, augment=False, workers=workers)[
+        0]  # only runs on process 0
 
     # Model parameters
-    hyp['cls'] *= nc / 80.  # scale coco-tuned hyp['cls'] to current dataset
-    model.nc = nc  # attach number of classes to model
+    hyp['cls'] *= len(classes) / 80.  # scale coco-tuned hyp['cls'] to current dataset
+    model.nc = len(classes)  # attach number of classes to model
     model.hyp = hyp  # attach hyperparameters to model
     model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
-    model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device)  # attach class weights
-    model.names = names
+    model.class_weights = labels_to_class_weights(dataset.labels, len(classes)).to(device)  # attach class weights
+    model.names = classes
 
     # Class frequency
     labels = np.concatenate(dataset.labels, 0)
@@ -177,7 +171,7 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
     t0 = time.time()
     nw = max(3 * nb, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
-    maps = np.zeros(nc)  # mAP per class
+    maps = np.zeros(len(classes))  # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
@@ -198,7 +192,7 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
         if dataset.image_weights:
             # Generate indices
             w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
-            image_weights = labels_to_image_weights(dataset.labels, nc=nc, class_weights=w)
+            image_weights = labels_to_image_weights(dataset.labels, nc=len(classes), class_weights=w)
             dataset.indices = random.choices(range(dataset.n), weights=image_weights,
                                              k=dataset.n)  # rand weighted idx
 
@@ -272,10 +266,12 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
         if ema:
             ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
-        results, maps, times = test.test(data,
+        results, maps, times = test.test(model=ema.ema.module if hasattr(ema.ema, 'module') else ema.ema,
+                                         train_list_path=train_list_path,
+                                         test_list_path=test_list_path,
+                                         classes=classes,
                                          batch_size=batch_size,
                                          imgsz=imgsz_test,
-                                         model=ema.ema.module if hasattr(ema.ema, 'module') else ema.ema,
                                          dataloader=testloader,
                                          save_dir=log_dir)
         results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
@@ -337,7 +333,9 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
 if __name__ == '__main__':
     weights = 'weights/yolov5s.pt'
     cfg = ''
-    data = 'dataset.yaml'
+    train_list_path = 'train.txt'
+    test_list_path = 'test.txt'
+    classes = ['not ok', 'ok']
     hyp = 'data/hyp.yaml'
     epochs = 8
     batch_size = 8
@@ -358,7 +356,6 @@ if __name__ == '__main__':
         logger.info('Resuming training from %s' % checkpoint)
 
     else:
-        data, cfg, hyp = check_file(data), check_file(cfg), check_file(hyp)  # check files
         assert len(cfg) or len(weights), 'either --cfg or --weights must be specified'
         img_size.extend([img_size[-1]] * (2 - len(img_size)))  # extend to 2 sizes (train, test)
 
@@ -371,5 +368,6 @@ if __name__ == '__main__':
     logger.info('Start Tensorboard with "tensorboard --logdir %s", view at http://localhost:6006/' % logdir)
     tb_writer = SummaryWriter(log_dir=increment_dir(Path(logdir) / 'exp', name))  # runs/exp
 
-    train(hyp, device, weights, tb_writer=tb_writer, cfg=cfg, data=data, epochs=epochs, batch_size=batch_size,
+    train(hyp, device, weights, tb_writer=tb_writer, cfg=cfg, train_list_path=train_list_path,
+          test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           img_size=img_size, resume=resume, name=name, logdir=logdir, workers=workers)
