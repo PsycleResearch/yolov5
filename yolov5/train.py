@@ -123,7 +123,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
                                                         hyperparameters=hyperparameters,
                                                         augment=augment,
-                                                        mosaic=False,
                                                         workers=workers)
     nb_batches = len(train_dataloader)
 
