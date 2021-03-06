@@ -191,8 +191,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         final_epoch = epoch + 1 == epochs
         test_precision, test_recall, test_mAP50, test_mAP = test(
             model=model,
-            batch_size=batch_size,
-            img_size=img_size,
             dataloader=test_dataloader,
             save_dir=logging_directory)
 

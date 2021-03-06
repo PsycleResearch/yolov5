@@ -11,9 +11,6 @@ from yolov5.utils.torch_utils import time_synchronized
 
 
 def test(model,
-         weights=None,
-         batch_size=16,
-         img_size=640,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
          augment=False,
