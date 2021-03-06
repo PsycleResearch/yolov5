@@ -402,7 +402,7 @@ def compute_loss(predictions, targets, model):
                     lcls += BCEcls(prediction_subset[:, 5:], t)  # BCE
 
             lobj += BCEobj(layer_predictions[..., 4], tobj) * balance[layer_index]  # obj loss
-        except Error as e:
+        except Exception as e:
             print(e)
             continue
 
