@@ -13,17 +13,15 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
 from torch.cuda import amp
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     torch_distributed_zero_first, labels_to_class_weights, plot_labels, check_anchors, labels_to_image_weights,
-    compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run, check_dataset, check_img_size,
-    increment_dir)
+    compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run, check_img_size)
 from yolov5.utils.google_utils import attempt_download
-from yolov5.utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
+from yolov5.utils.torch_utils import init_seeds, ModelEMA, intersect_dicts
 
 logger = logging.getLogger(__name__)
 import streamlit as st
@@ -329,8 +327,8 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
 
 
 if __name__ == '__main__':
-    weights = 'weights/yolov5s.pt'
-    cfg = ''
+    weights = 'weights/yolov5s.pt'  # pre-trained weights
+    cfg = None  # In case we resume
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
     classes = ['not ok', 'ok']
@@ -340,32 +338,21 @@ if __name__ == '__main__':
     img_size = [640, 640]
     resume = False
     name = ''
-    device = ''
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logdir = 'runs/'
     workers = 8
+    assert cfg is not None or weights is not None
+    # either cfg or weights must be specified
 
     # Resume
     if resume:  # resume an interrupted run
         checkpoint = resume if isinstance(resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(checkpoint), 'ERROR: --resume checkpoint does not exist'
-        # with open(Path(ckpt).parent.parent / 'opt.yaml') as f:
-        #     opt = argparse.Namespace(**yaml.load(f, Loader=yaml.FullLoader))  # replace
         cfg, weights, resume = '', checkpoint, True
-        logger.info('Resuming training from %s' % checkpoint)
-
-    else:
-        assert len(cfg) or len(weights), 'either --cfg or --weights must be specified'
-        img_size.extend([img_size[-1]] * (2 - len(img_size)))  # extend to 2 sizes (train, test)
-
-    device = select_device(device, batch_size=batch_size)
 
     with open(hyp) as f:
         hyp = yaml.load(f, Loader=yaml.FullLoader)  # load hyps
 
-    # Train
-    logger.info('Start Tensorboard with "tensorboard --logdir %s", view at http://localhost:6006/' % logdir)
-    tb_writer = SummaryWriter(log_dir=increment_dir(Path(logdir) / 'exp', name))  # runs/exp
-
-    train(hyp, device, weights, tb_writer=tb_writer, cfg=cfg, train_list_path=train_list_path,
+    train(hyp, device, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           img_size=img_size, resume=resume, name=name, logdir=logdir, workers=workers)
