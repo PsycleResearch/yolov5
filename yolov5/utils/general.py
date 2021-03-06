@@ -409,7 +409,7 @@ def compute_loss(p, targets, model):  # predictions, targets, model
     bs = tobj.shape[0]  # batch size
 
     loss = lbox + lobj + lcls
-    return loss * bs, torch.cat((lbox, lobj, lcls, loss)).detach()
+    return loss * bs
 
 
 def build_targets(p, targets, model):

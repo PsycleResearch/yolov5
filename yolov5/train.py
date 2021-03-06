@@ -141,23 +141,12 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     # Start training
     t0 = time.time()
     nb_warmup_iterations = max(3 * nb_batches, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
-    maps = np.zeros(nb_classes)  # mAP per class
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=is_cuda_available)
     logger.info('Starting training for %g epochs...' % epochs)
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
-        # Update image weights (optional)
-        print(train_dataset.image_weights)
-        print("+++++++")
-        if train_dataset.image_weights:
-            # Generate indices
-            w = model.class_weights.cpu().numpy() * (1 - maps) ** 2  # class weights
-            image_weights = labels_to_image_weights(train_dataset.labels, nc=nb_classes, class_weights=w)
-            train_dataset.indices = random.choices(range(train_dataset.n), weights=image_weights,
-                                                   k=train_dataset.n)  # rand weighted idx
 
-        mloss = torch.zeros(4, device=device)  # mean losses
         pbar = tqdm(enumerate(train_dataloader), total=nb_batches)  # progress bar
         optimizer.zero_grad()
 
@@ -183,7 +172,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                 pred = model(imgs)
 
                 # Loss
-                loss, loss_items = compute_loss(pred, targets.to(device), model)  # scaled by batch_size
+                loss, _ = compute_loss(pred, targets.to(device), model)
 
             # Backward
             scaler.scale(loss).backward()
@@ -193,8 +182,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                 scaler.step(optimizer)  # optimizer.step
                 scaler.update()
                 optimizer.zero_grad()
-            # Print
-            mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
             # end batch ------------------------------------------------------------------------------------------------
 
         # Scheduler
