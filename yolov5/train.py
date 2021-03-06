@@ -221,7 +221,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             exponential_moving_average.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
         results, maps, times = test(
-            model=exponential_moving_average.ema,
+            model=model,
             batch_size=batch_size,
             img_size=img_size,
             dataloader=test_dataloader,
