@@ -267,8 +267,6 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
             ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
         results, maps, times = test.test(model=ema.ema.module if hasattr(ema.ema, 'module') else ema.ema,
-                                         train_list_path=train_list_path,
-                                         test_list_path=test_list_path,
                                          classes=classes,
                                          batch_size=batch_size,
                                          imgsz=imgsz_test,
