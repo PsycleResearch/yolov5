@@ -143,7 +143,7 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
     ema = ModelEMA(model)
 
     # Trainloader
-    dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, hyp=hyp, augment=False, workers=workers)
+    dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, hyp=hyp, augment=True, workers=workers)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, nc, data, nc - 1)
