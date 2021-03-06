@@ -338,7 +338,7 @@ if __name__ == '__main__':
     weights = 'weights/yolov5s.pt'
     cfg = ''
     data = 'dataset.yaml'
-    hyp = ''
+    hyp = 'data/hyp.yaml'
     epochs = 8
     batch_size = 8
     img_size = [640, 640]
@@ -348,35 +348,16 @@ if __name__ == '__main__':
     logdir = 'runs/'
     workers = 8
 
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--weights', type=str, default='yolov5s.pt', help='initial weights path')
-    # parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
-    # parser.add_argument('--data', type=str, default='data/coco128.yaml', help='data.yaml path')
-    # parser.add_argument('--hyp', type=str, default='', help='hyperparameters path, i.e. data/hyp.scratch.yaml')
-    # parser.add_argument('--epochs', type=int, default=300)
-    # parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
-    # parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='train,test sizes')
-    # parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
-    # parser.add_argument('--name', default='', help='renames results.txt to results_name.txt if supplied')
-    # parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    # parser.add_argument('--logdir', type=str, default='runs/', help='logging directory')
-    # parser.add_argument('--workers', type=int, default=8, help='maximum number of dataloader workers')
-    # opt = parser.parse_args()
-
-    # Set DDP variables
-    set_logging(-1)
-
     # Resume
     if resume:  # resume an interrupted run
-        ckpt = resume if isinstance(resume, str) else get_latest_run()  # specified or most recent path
-        assert os.path.isfile(ckpt), 'ERROR: --resume checkpoint does not exist'
+        checkpoint = resume if isinstance(resume, str) else get_latest_run()  # specified or most recent path
+        assert os.path.isfile(checkpoint), 'ERROR: --resume checkpoint does not exist'
         # with open(Path(ckpt).parent.parent / 'opt.yaml') as f:
         #     opt = argparse.Namespace(**yaml.load(f, Loader=yaml.FullLoader))  # replace
-        cfg, weights, resume = '', ckpt, True
-        logger.info('Resuming training from %s' % ckpt)
+        cfg, weights, resume = '', checkpoint, True
+        logger.info('Resuming training from %s' % checkpoint)
 
     else:
-        hyp = hyp or ('data/hyp.finetune.yaml' if weights else 'data/hyp.scratch.yaml')
         data, cfg, hyp = check_file(data), check_file(cfg), check_file(hyp)  # check files
         assert len(cfg) or len(weights), 'either --cfg or --weights must be specified'
         img_size.extend([img_size[-1]] * (2 - len(img_size)))  # extend to 2 sizes (train, test)
