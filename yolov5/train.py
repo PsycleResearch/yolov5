@@ -391,4 +391,4 @@ if __name__ == '__main__':
     logger.info('Start Tensorboard with "tensorboard --logdir %s", view at http://localhost:6006/' % logdir)
     tb_writer = SummaryWriter(log_dir=increment_dir(Path(logdir) / 'exp', name))  # runs/exp
 
-    train(hyp, device, tb_writer)
+    train(hyp, device, weights, tb_writer=tb_writer)
