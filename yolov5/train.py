@@ -66,6 +66,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     hyperparameters['weight_decay'] *= batch_size * accumulate / nominal_batch_size  # scale weight_decay
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
+    print(pg0, pg1, pg2)
     for k, v in model.named_parameters():
         v.requires_grad = True
         if '.bias' in k:
@@ -74,6 +75,8 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             pg1.append(v)  # apply weight decay
         else:
             pg0.append(v)  # all else
+    print(pg0, pg1, pg2)
+    exit()
 
     optimizer = optim.Adam(pg0, lr=hyperparameters['lr0'], betas=(hyperparameters['beta1'], 0.999))
 
