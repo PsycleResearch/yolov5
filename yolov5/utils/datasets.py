@@ -44,12 +44,13 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8):
+def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8, cache_images=False):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
     dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                   augment=augment,  # augment images
                                   hyperparameters=hyperparameters,
-                                  stride=int(stride))
+                                  stride=int(stride),
+                                  cache_images=cache_images)
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -66,7 +67,7 @@ def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = N
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None,
                  image_weights=False,
-                 stride=32):
+                 stride=32, cache_images=False):
         try:
             f = []  # image files
             for p in path if isinstance(path, list) else [path]:
@@ -149,13 +150,14 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         self.imgs = [None] * n
-        gb = 0  # Gigabytes of cached images
-        pbar = tqdm(range(len(self.img_files)), desc='Caching images')
-        self.img_hw0, self.img_hw = [None] * n, [None] * n
-        for i in pbar:  # max 10k images
-            self.imgs[i], self.img_hw0[i], self.img_hw[i] = load_image(self, i)  # img, hw_original, hw_resized
-            gb += self.imgs[i].nbytes
-            pbar.desc = 'Caching images (%.1fGB)' % (gb / 1E9)
+        if cache_images:
+            gb = 0  # Gigabytes of cached images
+            pbar = tqdm(range(len(self.img_files)), desc='Caching images')
+            self.img_hw0, self.img_hw = [None] * n, [None] * n
+            for i in pbar:  # max 10k images
+                self.imgs[i], self.img_hw0[i], self.img_hw[i] = load_image(self, i)  # img, hw_original, hw_resized
+                gb += self.imgs[i].nbytes
+                pbar.desc = 'Caching images (%.1fGB)' % (gb / 1E9)
 
     def cache_labels(self, path='labels.cache'):
         # Cache dataset labels, check images and read shapes

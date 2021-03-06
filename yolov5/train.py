@@ -30,7 +30,7 @@ def fitness(precision, recall, map50, map, metric_weights: list):
 def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
           logging_directory='runs/',
           cfg: str = None, resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
-          test_list_path='text.txt', classes=[], augment=True):
+          test_list_path='text.txt', classes=[], augment=True, cache_images=False):
     is_cuda_available = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda_available else 'cpu')
     weights_directory = f'{logging_directory}/weights'
@@ -119,14 +119,16 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
                                                         hyperparameters=hyperparameters,
                                                         augment=augment,
-                                                        workers=workers)
+                                                        workers=workers,
+                                                        cache_images=cache_images)
     nb_batches = len(train_dataloader)
 
     # Testloader
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
                                            hyperparameters=hyperparameters,
                                            augment=False,
-                                           workers=workers)
+                                           workers=workers,
+                                           cache_images=cache_images)
 
     # Model parameters
     hyperparameters['cls_loss_gain'] *= nb_classes / 80.  # scale coco-tuned hyp['cls'] to current dataset
@@ -251,6 +253,7 @@ if __name__ == '__main__':
     logging_directory = 'runs/'
     workers = 8
     augment = True
+    cache_images = False
     metric_weights = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
 
     if resume:
