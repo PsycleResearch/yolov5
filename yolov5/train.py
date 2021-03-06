@@ -22,7 +22,6 @@ from yolov5.utils.general import (
 from yolov5.utils.torch_utils import init_seeds, intersect_dicts
 
 logger = logging.getLogger(__name__)
-import streamlit as st
 
 
 def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
@@ -143,19 +142,14 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     t0 = time.time()
     nw = max(3 * nb_batches, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
     maps = np.zeros(nb_classes)  # mAP per class
-    results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
+    # results = {}
+    # results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
     logger.info('Starting training for %g epochs...' % epochs)
-    my_bar = st.progress(0)
     results_dict = {'Epoch': '', 'Precision': '', 'Recall': '', 'mAP': '', 'F1': ''}
-    results_df = pd.DataFrame([results_dict])
-    results_table = st.table(results_df)
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
-        my_bar.progress(int(epoch / epochs * 100))
-        if epoch == epochs - 1:
-            my_bar.progress(100)
         # Update image weights (optional)
         if train_dataset.image_weights:
             # Generate indices
@@ -222,7 +216,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                           'Recall': str(round(results[1], 2)),
                           'mAP': str(round(results[2], 2)), 'F1': str(round(results[3], 2))}
         results_df_2 = pd.DataFrame([results_dict_2])
-        results_table.add_rows(results_df_2)
         # Write
         with open(results_file, 'a') as f:
             f.write('%10.4g' * 7 % results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
@@ -234,7 +227,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             best_fitness = fi
 
         # Save model
-        with open(results_file, 'r') as f:  # create checkpoint
+        with open(results_file, 'r') as f:
             checkpoint = {'epoch': epoch,
                           'best_fitness': best_fitness,
                           'training_results': f.read(),
