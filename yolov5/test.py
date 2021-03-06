@@ -132,7 +132,7 @@ def test(model,
     # Print results per class
     if nb_classes > 1 and len(stats):
         for i, c in enumerate(ap_class):
-            print_scores(names[c], seen, nb_targets[c], precision[i], recall[i], ap50[i], ap[i])
+            print_scores(names[c], seen, nb_targets[c], p[i], r[i], ap50[i], ap[i])
 
     # Print speeds
     t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (img_size, img_size, batch_size)  # tuple
