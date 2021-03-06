@@ -1,5 +1,4 @@
 import glob
-import glob
 import json
 import os
 from pathlib import Path

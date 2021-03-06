@@ -1,12 +1,7 @@
 import glob
 import math
 import os
-import platform
-import random
-import shutil
 import time
-from copy import copy
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -15,7 +10,6 @@ import torch.nn as nn
 import torchvision
 import yaml
 from scipy.cluster.vq import kmeans
-from scipy.signal import butter, filtfilt
 from tqdm import tqdm
 
 from yolov5.utils.torch_utils import is_parallel
@@ -34,15 +28,6 @@ def get_latest_run(search_dir='./runs'):
     # Return path to most recent 'last.pt' in /runs (i.e. to --resume from)
     last_list = glob.glob(f'{search_dir}/**/last*.pt', recursive=True)
     return max(last_list, key=os.path.getctime) if last_list else ''
-
-
-def check_img_size(img_size, s=32):
-    # Verify img_size is a multiple of stride s
-    new_size = make_divisible(img_size, int(s))  # ceil gs-multiple
-    # math.ceil(img_size / int(s)) * int(s)
-    if new_size != img_size:
-        print('WARNING: --img-size %g must be multiple of max stride %g, updating to %g' % (img_size, s, new_size))
-    return new_size
 
 
 def check_anchors(dataset, model, thr=4.0, img_size=640):
@@ -90,39 +75,6 @@ def check_anchor_order(m):
         m.anchor_grid[:] = m.anchor_grid.flip(0)
 
 
-def check_file(file):
-    # Search for file if not found
-    if os.path.isfile(file) or file == '':
-        return file
-    else:
-        files = glob.glob('./**/' + file, recursive=True)  # find file
-        assert len(files), 'File Not Found: %s' % file  # assert file was found
-        return files[0]  # return first file if multiple found
-
-
-def check_dataset(dict):
-    # Download dataset if not found
-    val, s = dict.get('val'), dict.get('download')
-    if val and len(val):
-        val = [os.path.abspath(x) for x in (val if isinstance(val, list) else [val])]  # val path
-        if not all(os.path.exists(x) for x in val):
-            print('\nWARNING: Dataset not found, nonexistant paths: %s' % [*val])
-            if s and len(s):  # download script
-                print('Attempting autodownload from: %s' % s)
-                if s.startswith('http') and s.endswith('.zip'):  # URL
-                    f = Path(s).name  # filename
-                    if platform.system() == 'Darwin':  # avoid MacOS python requests certificate error
-                        os.system('curl -L %s -o %s' % (s, f))
-                    else:
-                        torch.hub.download_url_to_file(s, f)
-                    r = os.system('unzip -q %s -d ../ && rm %s' % (f, f))  # unzip
-                else:  # bash script
-                    r = os.system(s)
-                print('Dataset autodownload %s\n' % ('success' if r == 0 else 'failure'))  # analyze return value
-            else:
-                raise Exception('Dataset not found.')
-
-
 def make_divisible(x, divisor):
     # Returns x evenly divisble by divisor
     return math.ceil(x / divisor) * divisor
@@ -136,10 +88,6 @@ def labels_to_class_weights(labels, nc=80):
     labels = np.concatenate(labels, 0)  # labels.shape = (866643, 5) for COCO
     classes = labels[:, 0].astype(np.int)  # labels = [class xywh]
     weights = np.bincount(classes, minlength=nc)  # occurences per class
-
-    # Prepend gridpoint count (for uCE trianing)
-    # gpi = ((320 / 32 * np.array([1, 2, 4])) ** 2 * 3).sum()  # gridpoints per image
-    # weights = np.hstack([gpi * len(labels)  - weights.sum() * 9, weights * 9]) ** 0.5  # prepend gridpoints to start
 
     weights[weights == 0] = 1  # replace empty bins with 1
     weights = 1 / weights  # number of targets per class
@@ -158,10 +106,6 @@ def labels_to_image_weights(labels, nc=80, class_weights=np.ones(80)):
 
 def coco80_to_coco91_class():  # converts 80-index (val2014) to 91-index (paper)
     # https://tech.amikelive.com/node-718/what-object-categories-labels-are-in-coco-dataset/
-    # a = np.loadtxt('data/coco.names', dtype='str', delimiter='\n')
-    # b = np.loadtxt('data/coco_paper.names', dtype='str', delimiter='\n')
-    # x1 = [list(a[i] == b).index(True) + 1 for i in range(80)]  # darknet to coco
-    # x2 = [list(b[i] == a).index(True) if any(b[i] == a) else None for i in range(91)]  # coco to darknet
     x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34,
          35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
          64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90]
@@ -258,16 +202,6 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
             # AP from recall-precision curve
             for j in range(tp.shape[1]):
                 ap[ci, j] = compute_ap(recall[:, j], precision[:, j])
-
-            # Plot
-            # fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-            # ax.plot(recall, precision)
-            # ax.set_xlabel('Recall')
-            # ax.set_ylabel('Precision')
-            # ax.set_xlim(0, 1.01)
-            # ax.set_ylim(0, 1.01)
-            # fig.tight_layout()
-            # fig.savefig('PR_curve.png', dpi=300)
 
     # Compute F1 score (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + 1e-16)
@@ -370,17 +304,8 @@ def box_iou(box1, box2):
     area1 = box_area(box1.T)
     area2 = box_area(box2.T)
 
-    # inter(N,M) = (rb(N,M,2) - lt(N,M,2)).clamp(0).prod(2)
     inter = (torch.min(box1[:, None, 2:], box2[:, 2:]) - torch.max(box1[:, None, :2], box2[:, :2])).clamp(0).prod(2)
     return inter / (area1[:, None] + area2 - inter)  # iou = inter / (area1 + area2 - inter)
-
-
-def wh_iou(wh1, wh2):
-    # Returns the nxm IoU matrix. wh1 is nx2, wh2 is mx2
-    wh1 = wh1[:, None]  # [N,1,2]
-    wh2 = wh2[None]  # [1,M,2]
-    inter = torch.min(wh1, wh2).prod(2)  # [N,M]
-    return inter / (wh1.prod(2) + wh2.prod(2) - inter)  # iou = inter / (area1 + area2 - inter)
 
 
 class FocalLoss(nn.Module):
@@ -395,8 +320,6 @@ class FocalLoss(nn.Module):
 
     def forward(self, pred, true):
         loss = self.loss_fcn(pred, true)
-        # p_t = torch.exp(-loss)
-        # loss *= self.alpha * (1.000001 - p_t) ** self.gamma  # non-zero power for gradient stability
 
         # TF implementation https://github.com/tensorflow/addons/blob/v0.7.1/tensorflow_addons/losses/focal_loss.py
         pred_prob = torch.sigmoid(pred)  # prob from logits
@@ -481,10 +404,6 @@ def compute_loss(p, targets, model):  # predictions, targets, model
                 t = torch.full_like(ps[:, 5:], cn, device=device)  # targets
                 t[range(n), tcls[i]] = cp
                 lcls += BCEcls(ps[:, 5:], t)  # BCE
-
-            # Append targets to text file
-            # with open('targets.txt', 'a') as file:
-            #     [file.write('%11.5g ' * 4 % tuple(x) + '\n') for x in torch.cat((txy[i], twh[i]), 1)]
 
         lobj += BCEobj(pi[..., 4], tobj) * balance[i]  # obj loss
 
@@ -578,7 +497,6 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, merge=False, 
     output = [None] * prediction.shape[0]
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply constraints
-        # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
         x = x[xc[xi]]  # confidence
 
         # If none remain process next image
@@ -603,17 +521,10 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, merge=False, 
         if classes:
             x = x[(x[:, 5:6] == torch.tensor(classes, device=x.device)).any(1)]
 
-        # Apply finite constraint
-        # if not torch.isfinite(x).all():
-        #     x = x[torch.isfinite(x).all(1)]
-
         # If none remain process next image
         n = x.shape[0]  # number of boxes
         if not n:
             continue
-
-        # Sort by confidence
-        # x = x[x[:, 4].argsort(descending=True)]
 
         # Batched NMS
         c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
@@ -651,71 +562,6 @@ def strip_optimizer(f='weights/best.pt', s=''):  # from utils.general import *; 
     torch.save(x, s or f)
     mb = os.path.getsize(s or f) / 1E6  # filesize
     print('Optimizer stripped from %s,%s %.1fMB' % (f, (' saved as %s,' % s) if s else '', mb))
-
-
-def coco_class_count(path='../coco/labels/train2014/'):
-    # Histogram of occurrences per class
-    nc = 80  # number classes
-    x = np.zeros(nc, dtype='int32')
-    files = sorted(glob.glob('%s/*.*' % path))
-    for i, file in enumerate(files):
-        labels = np.loadtxt(file, dtype=np.float32).reshape(-1, 5)
-        x += np.bincount(labels[:, 0].astype('int32'), minlength=nc)
-        print(i, len(files))
-
-
-def coco_only_people(path='../coco/labels/train2017/'):  # from utils.general import *; coco_only_people()
-    # Find images with only people
-    files = sorted(glob.glob('%s/*.*' % path))
-    for i, file in enumerate(files):
-        labels = np.loadtxt(file, dtype=np.float32).reshape(-1, 5)
-        if all(labels[:, 0] == 0):
-            print(labels.shape[0], file)
-
-
-def crop_images_random(path='../images/', scale=0.50):  # from utils.general import *; crop_images_random()
-    # crops images into random squares up to scale fraction
-    # WARNING: overwrites images!
-    for file in tqdm(sorted(glob.glob('%s/*.*' % path))):
-        img = cv2.imread(file)  # BGR
-        if img is not None:
-            h, w = img.shape[:2]
-
-            # create random mask
-            a = 30  # minimum size (pixels)
-            mask_h = random.randint(a, int(max(a, h * scale)))  # mask height
-            mask_w = mask_h  # mask width
-
-            # box
-            xmin = max(0, random.randint(0, w) - mask_w // 2)
-            ymin = max(0, random.randint(0, h) - mask_h // 2)
-            xmax = min(w, xmin + mask_w)
-            ymax = min(h, ymin + mask_h)
-
-            # apply random color mask
-            cv2.imwrite(file, img[ymin:ymax, xmin:xmax])
-
-
-def coco_single_class_labels(path='../coco/labels/train2014/', label_class=43):
-    # Makes single-class coco datasets. from utils.general import *; coco_single_class_labels()
-    if os.path.exists('new/'):
-        shutil.rmtree('new/')  # delete output folder
-    os.makedirs('new/')  # make new output folder
-    os.makedirs('new/labels/')
-    os.makedirs('new/images/')
-    for file in tqdm(sorted(glob.glob('%s/*.*' % path))):
-        with open(file, 'r') as f:
-            labels = np.array([x.split() for x in f.read().splitlines()], dtype=np.float32)
-        i = labels[:, 0] == label_class
-        if any(i):
-            img_file = file.replace('labels', 'images').replace('txt', 'jpg')
-            labels[:, 0] = 0  # reset class to 0
-            with open('new/images.txt', 'a') as f:  # add image to dataset list
-                f.write(img_file + '\n')
-            with open('new/labels/' + Path(file).name, 'a') as f:  # write label
-                for l in labels[i]:
-                    f.write('%g %.6f %.6f %.6f %.6f\n' % tuple(l))
-            shutil.copyfile(src=img_file, dst='new/images/' + Path(file).name.replace('txt', 'jpg'))  # copy images
 
 
 def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=1000, verbose=True):
@@ -761,7 +607,7 @@ def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=10
         with open(path) as f:
             data_dict = yaml.load(f, Loader=yaml.FullLoader)  # model dict
         from yolov5.utils.datasets import LoadImagesAndLabels
-        dataset = LoadImagesAndLabels(data_dict['train'], augment=True, rect=True)
+        dataset = LoadImagesAndLabels(data_dict['train'], augment=True)
     else:
         dataset = path  # dataset
 
@@ -785,19 +631,6 @@ def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=10
     wh0 = torch.tensor(wh0, dtype=torch.float32)  # unflitered
     k = print_results(k)
 
-    # Plot
-    # k, d = [None] * 20, [None] * 20
-    # for i in tqdm(range(1, 21)):
-    #     k[i-1], d[i-1] = kmeans(wh / s, i)  # points, mean distance
-    # fig, ax = plt.subplots(1, 2, figsize=(14, 7))
-    # ax = ax.ravel()
-    # ax[0].plot(np.arange(1, 21), np.array(d) ** 2, marker='.')
-    # fig, ax = plt.subplots(1, 2, figsize=(14, 7))  # plot wh
-    # ax[0].hist(wh[wh[:, 0]<100, 0],400)
-    # ax[1].hist(wh[wh[:, 1]<100, 1],400)
-    # fig.tight_layout()
-    # fig.savefig('wh.png', dpi=200)
-
     # Evolve
     npr = np.random
     f, sh, mp, s = fitness(k), k.shape, 0.9, 0.1  # fitness, generations, mutation prob, sigma
@@ -815,70 +648,6 @@ def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=10
                 print_results(k)
 
     return print_results(k)
-
-
-def print_mutation(hyp, results, yaml_file='hyp_evolved.yaml', bucket=''):
-    # Print mutation results to evolve.txt (for use with train.py --evolve)
-    a = '%10s' * len(hyp) % tuple(hyp.keys())  # hyperparam keys
-    b = '%10.3g' * len(hyp) % tuple(hyp.values())  # hyperparam values
-    c = '%10.4g' * len(results) % results  # results (P, R, mAP@0.5, mAP@0.5:0.95, val_losses x 3)
-    print('\n%s\n%s\nEvolved fitness: %s\n' % (a, b, c))
-
-    if bucket:
-        os.system('gsutil cp gs://%s/evolve.txt .' % bucket)  # download evolve.txt
-
-    with open('evolve.txt', 'a') as f:  # append result
-        f.write(c + b + '\n')
-    x = np.unique(np.loadtxt('evolve.txt', ndmin=2), axis=0)  # load unique rows
-    x = x[np.argsort(-fitness(x))]  # sort
-    np.savetxt('evolve.txt', x, '%10.3g')  # save sort by fitness
-
-    if bucket:
-        os.system('gsutil cp evolve.txt gs://%s' % bucket)  # upload evolve.txt
-
-    # Save yaml
-    for i, k in enumerate(hyp.keys()):
-        hyp[k] = float(x[0, i + 7])
-    with open(yaml_file, 'w') as f:
-        results = tuple(x[0, :7])
-        c = '%10.4g' * len(results) % results  # results (P, R, mAP@0.5, mAP@0.5:0.95, val_losses x 3)
-        f.write('# Hyperparameter Evolution Results\n# Generations: %g\n# Metrics: ' % len(x) + c + '\n\n')
-        yaml.dump(hyp, f, sort_keys=False)
-
-
-def apply_classifier(x, model, img, im0):
-    # applies a second stage classifier to yolo outputs
-    im0 = [im0] if isinstance(im0, np.ndarray) else im0
-    for i, d in enumerate(x):  # per image
-        if d is not None and len(d):
-            d = d.clone()
-
-            # Reshape and pad cutouts
-            b = xyxy2xywh(d[:, :4])  # boxes
-            b[:, 2:] = b[:, 2:].max(1)[0].unsqueeze(1)  # rectangle to square
-            b[:, 2:] = b[:, 2:] * 1.3 + 30  # pad
-            d[:, :4] = xywh2xyxy(b).long()
-
-            # Rescale boxes from img_size to im0 size
-            scale_coords(img.shape[2:], d[:, :4], im0[i].shape)
-
-            # Classes
-            pred_cls1 = d[:, 5].long()
-            ims = []
-            for j, a in enumerate(d):  # per item
-                cutout = im0[i][int(a[1]):int(a[3]), int(a[0]):int(a[2])]
-                im = cv2.resize(cutout, (224, 224))  # BGR
-                # cv2.imwrite('test%i.jpg' % j, cutout)
-
-                im = im[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
-                im = np.ascontiguousarray(im, dtype=np.float32)  # uint8 to float32
-                im /= 255.0  # 0 - 255 to 0.0 - 1.0
-                ims.append(im)
-
-            pred_cls2 = model(torch.Tensor(ims).to(d.device)).argmax(1)  # classifier prediction
-            x[i] = x[i][pred_cls1 == pred_cls2]  # retain matching class detections
-
-    return x
 
 
 def fitness(x, weights=None):
@@ -913,73 +682,6 @@ def output_to_target(output, width, height):
     return np.array(targets)
 
 
-def increment_dir(dir, comment=''):
-    # Increments a directory runs/exp1 --> runs/exp2_comment
-    n = 0  # number
-    dir = str(Path(dir))  # os-agnostic
-    d = sorted(glob.glob(dir + '*'))  # directories
-    if len(d):
-        n = max([int(x[len(dir):x.find('_') if '_' in x else None]) for x in d]) + 1  # increment
-    return dir + str(n) + ('_' + comment if comment else '')
-
-
-# Plotting functions ---------------------------------------------------------------------------------------------------
-def hist2d(x, y, n=100):
-    # 2d histogram used in labels.png and evolve.png
-    xedges, yedges = np.linspace(x.min(), x.max(), n), np.linspace(y.min(), y.max(), n)
-    hist, xedges, yedges = np.histogram2d(x, y, (xedges, yedges))
-    xidx = np.clip(np.digitize(x, xedges) - 1, 0, hist.shape[0] - 1)
-    yidx = np.clip(np.digitize(y, yedges) - 1, 0, hist.shape[1] - 1)
-    return np.log(hist[xidx, yidx])
-
-
-def butter_lowpass_filtfilt(data, cutoff=1500, fs=50000, order=5):
-    # https://stackoverflow.com/questions/28536191/how-to-filter-smooth-with-scipy-numpy
-    def butter_lowpass(cutoff, fs, order):
-        nyq = 0.5 * fs
-        normal_cutoff = cutoff / nyq
-        b, a = butter(order, normal_cutoff, btype='low', analog=False)
-        return b, a
-
-    b, a = butter_lowpass(cutoff, fs, order=order)
-    return filtfilt(b, a, data)  # forward-backward filter
-
-
-def plot_one_box(x, img, color=None, label=None, line_thickness=None):
-    # Plots one bounding box on image img
-    tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
-    color = color or [random.randint(0, 255) for _ in range(3)]
-    c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
-    cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
-    if label:
-        tf = max(tl - 1, 1)  # font thickness
-        t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
-        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
-        cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
-        cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
-
-
-def plot_wh_methods():  # from utils.general import *; plot_wh_methods()
-    # Compares the two methods for width-height anchor multiplication
-    # https://github.com/ultralytics/yolov3/issues/168
-    x = np.arange(-4.0, 4.0, .1)
-    ya = np.exp(x)
-    yb = torch.sigmoid(torch.from_numpy(x)).numpy() * 2
-
-    # fig = plt.figure(figsize=(6, 3), dpi=150)
-    # plt.plot(x, ya, '.-', label='YOLOv3')
-    # plt.plot(x, yb ** 2, '.-', label='YOLOv5 ^2')
-    # plt.plot(x, yb ** 1.6, '.-', label='YOLOv5 ^1.6')
-    # plt.xlim(left=-4, right=4)
-    # plt.ylim(bottom=0, top=6)
-    # plt.xlabel('input')
-    # plt.ylabel('output')
-    # plt.grid()
-    # plt.legend()
-    # fig.tight_layout()
-    # fig.savefig('comparison.png', dpi=200)
-
-
 def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max_size=640, max_subplots=16):
     tl = 3  # line thickness
     tf = max(tl - 1, 1)  # font thickness
@@ -1009,12 +711,6 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
     # Empty array for output
     mosaic = np.full((int(ns * h), int(ns * w), 3), 255, dtype=np.uint8)
 
-    # Fix class - colour map
-    # prop_cycle = plt.rcParams['axes.prop_cycle']
-    # https://stackoverflow.com/questions/51350872/python-from-color-name-to-rgb
-    hex2rgb = lambda h: tuple(int(h[1 + i:1 + i + 2], 16) for i in (0, 2, 4))
-    # color_lut = [hex2rgb(h) for h in prop_cycle.by_key()['color']]
-
     for i, img in enumerate(images):
         if i == max_subplots:  # if last batch has fewer images than we expect
             break
@@ -1032,19 +728,11 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
             boxes = xywh2xyxy(image_targets[:, 2:6]).T
             classes = image_targets[:, 1].astype('int')
             gt = image_targets.shape[1] == 6  # ground truth if no conf column
-            conf = None if gt else image_targets[:, 6]  # check for confidence presence (gt vs pred)
 
             boxes[[0, 2]] *= w
             boxes[[0, 2]] += block_x
             boxes[[1, 3]] *= h
             boxes[[1, 3]] += block_y
-            for j, box in enumerate(boxes.T):
-                cls = int(classes[j])
-                # color = color_lut[cls % len(color_lut)]
-                cls = names[cls] if names else cls
-                if gt or conf[j] > 0.3:  # 0.3 conf thresh
-                    label = '%s' % cls if gt else '%s %.1f' % (cls, conf[j])
-                    # plot_one_box(box, mosaic, label=label, color=color, line_thickness=tl)
 
         # Draw image filename labels
         if paths is not None:
@@ -1061,91 +749,3 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
         cv2.imwrite(fname, cv2.cvtColor(mosaic, cv2.COLOR_BGR2RGB))
 
     return mosaic
-
-
-def plot_lr_scheduler(optimizer, scheduler, epochs=300, save_dir=''):
-    # Plot LR simulating training for full epochs
-    optimizer, scheduler = copy(optimizer), copy(scheduler)  # do not modify originals
-    y = []
-    for _ in range(epochs):
-        scheduler.step()
-        y.append(optimizer.param_groups[0]['lr'])
-    # plt.plot(y, '.-', label='LR')
-    # plt.xlabel('epoch')
-    # plt.ylabel('LR')
-    # plt.grid()
-    # plt.xlim(0, epochs)
-    # plt.ylim(0)
-    # plt.tight_layout()
-    # plt.savefig(Path(save_dir) / 'LR.png', dpi=200)
-
-
-def plot_test_txt():  # from utils.general import *; plot_test()
-    # Plot test.txt histograms
-    x = np.loadtxt('test.txt', dtype=np.float32)
-    box = xyxy2xywh(x[:, :4])
-    cx, cy = box[:, 0], box[:, 1]
-
-    # fig, ax = plt.subplots(1, 1, figsize=(6, 6), tight_layout=True)
-    # ax.hist2d(cx, cy, bins=600, cmax=10, cmin=0)
-    # ax.set_aspect('equal')
-    # plt.savefig('hist2d.png', dpi=300)
-
-    # fig, ax = plt.subplots(1, 2, figsize=(12, 6), tight_layout=True)
-    # ax[0].hist(cx, bins=600)
-    # ax[1].hist(cy, bins=600)
-    # plt.savefig('hist1d.png', dpi=200)
-
-
-def plot_targets_txt():  # from utils.general import *; plot_targets_txt()
-    # Plot targets.txt histograms
-    x = np.loadtxt('targets.txt', dtype=np.float32).T
-    s = ['x targets', 'y targets', 'width targets', 'height targets']
-    # fig, ax = plt.subplots(2, 2, figsize=(8, 8), tight_layout=True)
-    # ax = ax.ravel()
-    # for i in range(4):
-    #     ax[i].hist(x[i], bins=100, label='%.3g +/- %.3g' % (x[i].mean(), x[i].std()))
-    #     ax[i].legend()
-    #     ax[i].set_title(s[i])
-    # # plt.savefig('targets.jpg', dpi=200)
-
-
-
-
-def plot_results(start=0, stop=0, bucket='', id=(), labels=(),
-                 save_dir=''):  # from utils.general import *; plot_results()
-    pass
-    # Plot training 'results*.txt' as seen in https://github.com/ultralytics/yolov5#reproduce-our-training
-    # fig, ax = plt.subplots(2, 5, figsize=(12, 6))
-    # ax = ax.ravel()
-    # s = ['GIoU', 'Objectness', 'Classification', 'Precision', 'Recall',
-    #      'val GIoU', 'val Objectness', 'val Classification', 'mAP@0.5', 'mAP@0.5:0.95']
-    # if bucket:
-    #     # os.system('rm -rf storage.googleapis.com')
-    #     # files = ['https://storage.googleapis.com/%s/results%g.txt' % (bucket, x) for x in id]
-    #     files = ['results%g.txt' % x for x in id]
-    #     c = ('gsutil cp ' + '%s ' * len(files) + '.') % tuple('gs://%s/results%g.txt' % (bucket, x) for x in id)
-    #     os.system(c)
-    # else:
-    #     files = glob.glob(str(Path(save_dir) / 'results*.txt')) + glob.glob('../../Downloads/results*.txt')
-    # for fi, f in enumerate(files):
-    #     try:
-    #         results = np.loadtxt(f, usecols=[2, 3, 4, 8, 9, 12, 13, 14, 10, 11], ndmin=2).T
-    #         n = results.shape[1]  # number of rows
-    #         x = range(start, min(stop, n) if stop else n)
-    #         for i in range(10):
-    #             y = results[i, x]
-    #             if i in [0, 1, 2, 5, 6, 7]:
-    #                 y[y == 0] = np.nan  # dont show zero loss values
-    #                 # y /= y[0]  # normalize
-    #             label = labels[fi] if len(labels) else Path(f).stem
-    #             ax[i].plot(x, y, marker='.', label=label, linewidth=2, markersize=8)
-    #             ax[i].set_title(s[i])
-    #             # if i in [5, 6, 7]:  # share train and val loss y axes
-    #             #     ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
-    #     except Exception as e:
-    #         print('Warning: Plotting error for %s; %s' % (f, e))
-
-    # fig.tight_layout()
-    # ax[1].legend()
-    # fig.savefig(Path(save_dir) / 'results.png', dpi=200)

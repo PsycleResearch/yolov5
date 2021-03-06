@@ -3,7 +3,6 @@ import logging
 import math
 import os
 import random
-from test import test
 import time
 from pathlib import Path
 
@@ -15,11 +14,12 @@ import torch.utils.data
 from torch.cuda import amp
 from tqdm import tqdm
 
+from test import test
 from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     labels_to_class_weights, check_anchors, labels_to_image_weights,
-    compute_loss, plot_images, fitness, strip_optimizer, plot_results, get_latest_run)
+    compute_loss, plot_images, fitness, strip_optimizer, get_latest_run)
 from yolov5.utils.torch_utils import init_seeds, ModelEMA, intersect_dicts
 
 logger = logging.getLogger(__name__)
@@ -286,7 +286,6 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
             ispt = f2.endswith('.pt')  # is *.pt
             strip_optimizer(f2) if ispt else None  # strip optimizer
     # Finish
-    plot_results(save_dir=log_dir)  # save as results.png
     logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
 
     torch.cuda.empty_cache()
