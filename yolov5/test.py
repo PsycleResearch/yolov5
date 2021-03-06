@@ -11,7 +11,6 @@ from yolov5.utils.torch_utils import time_synchronized
 
 
 def test(model,
-         classes=[],
          weights=None,
          batch_size=16,
          img_size=640,
@@ -31,12 +30,11 @@ def test(model,
 
     # Configure
     model.eval()
-    nb_classes = len(classes)
+    nb_classes = len(model.classes)
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
 
     seen = 0
-    names = model.names if hasattr(model, 'names') else model.module.names
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
@@ -113,9 +111,9 @@ def test(model,
         # Plot images
         if batch_i < 1:
             f = Path(save_dir) / ('test_batch%g_gt.jpg' % batch_i)  # filename
-            plot_images(img, targets, paths, str(f), names)  # ground truth
+            plot_images(img, targets, paths, str(f), model.classes)  # ground truth
             f = Path(save_dir) / ('test_batch%g_pred.jpg' % batch_i)
-            plot_images(img, output_to_target(output, width, height), paths, str(f), names)  # predictions
+            plot_images(img, output_to_target(output, width, height), paths, str(f), model.classes)  # predictions
 
     # Compute statistics
     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
@@ -131,7 +129,7 @@ def test(model,
     # Print results per class
     if nb_classes > 1 and len(stats):
         for i, c in enumerate(ap_class):
-            print_scores(names[c], seen, nb_targets[c], p[i], r[i], ap50[i], ap[i])
+            print_scores(model.classes[c], seen, nb_targets[c], p[i], r[i], ap50[i], ap[i])
 
     # Print speeds
     t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (img_size, img_size, batch_size)  # tuple
