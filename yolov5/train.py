@@ -172,7 +172,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                 pred = model(imgs)
 
                 # Loss
-                loss, _ = compute_loss(pred, targets.to(device), model)
+                loss = compute_loss(pred, targets.to(device), model)
 
             # Backward
             scaler.scale(loss).backward()
