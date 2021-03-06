@@ -63,20 +63,15 @@ class Model(nn.Module):
         super(Model, self).__init__()
         if isinstance(cfg, dict):
             self.yaml = cfg  # model dict
-            print("DICT")
-            exit()
         else:  # is *.yaml
-            print("YAML")
-            exit()
             import yaml  # for torch hub
             self.yaml_file = Path(cfg).name
             with open(cfg) as f:
                 self.yaml = yaml.load(f, Loader=yaml.FullLoader)  # model dict
 
         # Define model
-        if nb_classes and nb_classes != self.yaml['nc']:
-            print('Overriding %s nc=%g with nc=%g' % (cfg, self.yaml['nc'], nb_classes))
-            self.yaml['nc'] = nb_classes  # override yaml value
+        if nb_classes and nb_classes != self.yaml['nb_classes']:
+            self.yaml['nb_classes'] = nb_classes  # override yaml value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[channels])  # model, savelist, ch_out
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
 
