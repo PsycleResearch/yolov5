@@ -238,8 +238,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             checkpoint = {'epoch': epoch,
                           'best_fitness': best_fitness,
                           'training_results': f.read(),
-                          'model': exponential_moving_average.ema.module if hasattr(exponential_moving_average,
-                                                                                    'module') else exponential_moving_average.ema,
+                          'model': model,
                           'optimizer': None if final_epoch else optimizer.state_dict()}
 
         # Save last, best and delete
