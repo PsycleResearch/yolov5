@@ -372,36 +372,39 @@ def compute_loss(predictions, targets, model):
         BCEcls, BCEobj = FocalLoss(BCEcls, focal_loss_gamma), FocalLoss(BCEobj, focal_loss_gamma)
 
     # Losses
-    nb_targets = 0
+    nb_targets_total = 0
     nb_outputs = len(predictions)
-    print(nb_outputs)
-    balance = [4.0, 1.0, 0.4] if nb_outputs == 3 else [4.0, 1.0, 0.4, 0.1]  # P3-5 or P3-6
-    for i, pi in enumerate(predictions):  # layer index, layer predictions
-        b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
-        tobj = torch.zeros_like(pi[..., 0], device=device)  # target obj
+    balance = [4.0, 1.0, 0.4]  # if nb_outputs == 3 else [4.0, 1.0, 0.4, 0.1]  # P3-5 or P3-6
+    for layer_index, layer_predictions in enumerate(predictions):  # layer index, layer predictions
+        image, anchor, gridy, gridx = indices[layer_index]
+        tobj = torch.zeros_like(layer_predictions[..., 0], device=device)  # target obj
 
-        n = b.shape[0]  # number of targets
-        if n:
-            nb_targets += n  # cumulative targets
-            ps = pi[b, a, gj, gi]  # prediction subset corresponding to targets
+        nb_targets = image.shape[0]  # number of targets
+        if nb_targets:
+            print(nb_targets)
+            nb_targets_total += nb_targets  # cumulative targets
+            ps = layer_predictions[image, anchor, gridy, gridx]  # prediction subset corresponding to targets
 
             # Regression
             pxy = ps[:, :2].sigmoid() * 2. - 0.5
-            pwh = (ps[:, 2:4].sigmoid() * 2) ** 2 * anchors[i]
+            pwh = (ps[:, 2:4].sigmoid() * 2) ** 2 * anchors[layer_index]
             pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
-            giou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, CIoU=True)  # giou(prediction, target)
+            giou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)  # giou(prediction, target)
             lbox += (1.0 - giou).mean()  # giou loss
 
             # Objectness
-            tobj[b, a, gj, gi] = (1.0 - model.giou_loss_ratio) + model.giou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
+            tobj[image, anchor, gridy, gridx] = (1.0 - model.giou_loss_ratio) + model.giou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
 
             # Classification
             if model.nb_classes > 1:  # cls loss (only if multiple classes)
                 t = torch.full_like(ps[:, 5:], cn, device=device)  # targets
-                t[range(n), tcls[i]] = cp
+                t[range(nb_targets), tcls[layer_index]] = cp
                 lcls += BCEcls(ps[:, 5:], t)  # BCE
+        else:
+            print(nb_targets)
+            exit()
 
-        lobj += BCEobj(pi[..., 4], tobj) * balance[i]  # obj loss
+        lobj += BCEobj(layer_predictions[..., 4], tobj) * balance[layer_index]  # obj loss
 
     s = 3 / nb_outputs  # output count scaling
     lbox *= hyperparameters['giou_loss_gain'] * s
