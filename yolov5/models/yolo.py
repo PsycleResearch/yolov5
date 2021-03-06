@@ -70,7 +70,7 @@ class Model(nn.Module):
                 self.yaml = yaml.load(f, Loader=yaml.FullLoader)  # model dict
 
         # Define model
-        if nb_classes and nb_classes != self.yaml['nb_classes']:
+        if nb_classes and nb_classes != self.yaml['nc']:  # 'nb_classes' is 'nc' in the pretrained weights
             self.yaml['nb_classes'] = nb_classes  # override yaml value
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=[channels])  # model, savelist, ch_out
         # print([x.shape for x in self.forward(torch.zeros(1, ch, 64, 64))])
