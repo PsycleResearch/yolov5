@@ -1,12 +1,10 @@
 import glob
-import logging
 import math
 import os
 import platform
 import random
 import shutil
 import time
-from contextlib import contextmanager
 from copy import copy
 from pathlib import Path
 
@@ -20,7 +18,7 @@ from scipy.cluster.vq import kmeans
 from scipy.signal import butter, filtfilt
 from tqdm import tqdm
 
-from yolov5.utils.torch_utils import init_seeds, is_parallel
+from yolov5.utils.torch_utils import is_parallel
 
 # import matplotlib.pyplot as plt
 

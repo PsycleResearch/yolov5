@@ -152,7 +152,6 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
     logger.info('Starting training for %g epochs...' % epochs)
-    # torch.autograd.set_detect_anomaly(True)
     my_bar = st.progress(0)
     results_dict = {'Epoch': '', 'Precision': '', 'Recall': '', 'mAP': '', 'F1': ''}
     results_df = pd.DataFrame([results_dict])
