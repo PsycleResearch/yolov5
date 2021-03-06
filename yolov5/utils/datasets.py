@@ -53,11 +53,8 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                       augment=augment,  # augment images
                                       hyp=hyp,  # augmentation hyperparameters
-                                      cache_images=True,
                                       single_cls=opt.single_cls,
-                                      stride=int(stride),
-                                      pad=pad,
-                                      rank=-1)
+                                      stride=int(stride))
 
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
@@ -73,7 +70,7 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, image_weights=False,
-                 cache_images=False, single_cls=False, stride=32, pad=0.0, rank=-1):
+                 single_cls=False, stride=32):
         try:
             f = []  # image files
             for p in path if isinstance(path, list) else [path]:
@@ -132,8 +129,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         create_datasubset, extract_bounding_boxes, labels_loaded = False, False, False
         nm, nf, ne, ns, nd = 0, 0, 0, 0, 0  # number missing, found, empty, datasubset, duplicate
         pbar = enumerate(self.label_files)
-        if rank in [-1, 0]:
-            pbar = tqdm(pbar)
+        pbar = tqdm(pbar)
         for i, file in pbar:
             l = self.labels[i]  # label
             if l is not None and l.shape[0]:
@@ -181,9 +177,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 ne += 1  # print('empty labels for image %s' % self.img_files[i])  # file empty
                 # os.system("rm '%s' '%s'" % (self.img_files[i], self.label_files[i]))  # remove
 
-            if rank in [-1, 0]:
-                pbar.desc = 'Scanning labels %s (%g found, %g missing, %g empty, %g duplicate, for %g images)' % (
-                    cache_path, nf, nm, ne, nd, n)
+            pbar.desc = 'Scanning labels %s (%g found, %g missing, %g empty, %g duplicate, for %g images)' % (
+                cache_path, nf, nm, ne, nd, n)
         if nf == 0:
             s = 'WARNING: No labels found in %s. See %s' % (os.path.dirname(file) + os.sep, help_url)
             print(s)
@@ -191,14 +186,13 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         self.imgs = [None] * n
-        if cache_images:
-            gb = 0  # Gigabytes of cached images
-            pbar = tqdm(range(len(self.img_files)), desc='Caching images')
-            self.img_hw0, self.img_hw = [None] * n, [None] * n
-            for i in pbar:  # max 10k images
-                self.imgs[i], self.img_hw0[i], self.img_hw[i] = load_image(self, i)  # img, hw_original, hw_resized
-                gb += self.imgs[i].nbytes
-                pbar.desc = 'Caching images (%.1fGB)' % (gb / 1E9)
+        gb = 0  # Gigabytes of cached images
+        pbar = tqdm(range(len(self.img_files)), desc='Caching images')
+        self.img_hw0, self.img_hw = [None] * n, [None] * n
+        for i in pbar:  # max 10k images
+            self.imgs[i], self.img_hw0[i], self.img_hw[i] = load_image(self, i)  # img, hw_original, hw_resized
+            gb += self.imgs[i].nbytes
+            pbar.desc = 'Caching images (%.1fGB)' % (gb / 1E9)
 
     def cache_labels(self, path='labels.cache'):
         # Cache dataset labels, check images and read shapes
