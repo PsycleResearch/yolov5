@@ -1,6 +1,3 @@
-import glob
-import json
-import os
 from pathlib import Path
 
 import numpy as np
@@ -8,8 +5,8 @@ import torch
 from tqdm import tqdm
 
 from yolov5.utils.general import (
-    coco80_to_coco91_class, compute_loss, non_max_suppression, scale_coords,
-    xyxy2xywh, clip_coords, plot_images, xywh2xyxy, box_iou, output_to_target, ap_per_class)
+    coco80_to_coco91_class, compute_loss, non_max_suppression, clip_coords, plot_images, xywh2xyxy, box_iou,
+    output_to_target, ap_per_class)
 from yolov5.utils.torch_utils import time_synchronized
 
 
@@ -20,7 +17,6 @@ def test(model,
          img_size=640,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
-         save_json=False,
          augment=False,
          verbose=False,
          dataloader=None,
@@ -85,20 +81,6 @@ def test(model,
             # Clip boxes to image bounds
             clip_coords(pred, (height, width))
 
-            # Append to pycocotools JSON dictionary
-            if save_json:
-                # [{"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}, ...
-                image_id = Path(paths[si]).stem
-                box = pred[:, :4].clone()  # xyxy
-                scale_coords(img[si].shape[1:], box, shapes[si][0], shapes[si][1])  # to original shape
-                box = xyxy2xywh(box)  # xywh
-                box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
-                for p, b in zip(pred.tolist(), box.tolist()):
-                    jdict.append({'image_id': int(image_id) if image_id.isnumeric() else image_id,
-                                  'category_id': coco91class[int(p[5])],
-                                  'bbox': [round(x, 3) for x in b],
-                                  'score': round(p[4], 5)})
-
             # Assign all predictions as incorrect
             correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
             if nl:
@@ -148,7 +130,7 @@ def test(model,
         nt = torch.zeros(1)
 
     # Print results
-    pf = '%20s' + '%12.3g' * 6  # print format
+    pf = '%12.3g' * 7  # print format
     print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
 
     # Print results per class
@@ -158,30 +140,6 @@ def test(model,
 
     # Print speeds
     t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (img_size, img_size, batch_size)  # tuple
-
-    # Save JSON
-    if save_json and len(jdict):
-        f = 'detections_val2017_%s_results.json' % \
-            (weights.split(os.sep)[-1].replace('.pt', '') if isinstance(weights, str) else '')  # filename
-        print('\nCOCO mAP with pycocotools... saving %s...' % f)
-        with open(f, 'w') as file:
-            json.dump(jdict, file)
-
-        try:  # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-            from pycocotools.coco import COCO
-            from pycocotools.cocoeval import COCOeval
-
-            imgIds = [int(Path(x).stem) for x in dataloader.dataset.img_files]
-            cocoGt = COCO(glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
-            cocoDt = cocoGt.loadRes(f)  # initialize COCO pred api
-            cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
-            cocoEval.params.imgIds = imgIds  # image IDs to evaluate
-            cocoEval.evaluate()
-            cocoEval.accumulate()
-            cocoEval.summarize()
-            map, map50 = cocoEval.stats[:2]  # update results (mAP@0.5:0.95, mAP@0.5)
-        except Exception as e:
-            print('ERROR: pycocotools unable to run: %s' % e)
 
     # Return results
     model.float()  # for training
