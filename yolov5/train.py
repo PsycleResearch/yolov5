@@ -46,7 +46,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         # Load pretrained model
         checkpoint = torch.load(weights, map_location=device)  # load checkpoint
         model = Model(checkpoint['model'].yaml, channels=3, nb_classes=nb_classes).to(device)
-        exclude = []  # exclude keys
         state_dict = checkpoint['model'].float().state_dict()  # to FP32
         state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
@@ -135,11 +134,11 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
     # Model parameters
     hyperparameters['cls_loss_gain'] *= nb_classes / 80.  # scale coco-tuned hyp['cls'] to current dataset
-    model.nc = nb_classes  # attach number of classes to model
-    model.hyp = hyperparameters  # attach hyperparameters to model
-    model.gr = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
+    model.nb_classes = nb_classes  # attach number of classes to model
+    model.hyperparameters = hyperparameters  # attach hyperparameters to model
+    model.giou_loss_ratio = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
     model.class_weights = labels_to_class_weights(train_dataset.labels, nb_classes).to(device)  # attach class weights
-    model.names = classes
+    model.classes = classes
 
     # Check anchors
     check_anchors(train_dataset, model=model, thr=hyperparameters['anchor_multiple_threshold'], img_size=img_size)
