@@ -4,7 +4,6 @@ import math
 import os
 import random
 import time
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -27,15 +26,14 @@ import streamlit as st
 
 
 def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights=None, epochs=2, batch_size=1,
-          logdir='runs/',
+          logging_directory='runs/',
           cfg='', resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
           test_list_path='text.txt', classes=[]):
-    log_dir = Path(logdir) / 'evolve'  # logging directory
-    wdir = str(log_dir / 'weights') + os.sep  # weights directory
-    os.makedirs(wdir, exist_ok=True)
-    last = wdir + 'last.pt'
-    best = wdir + 'best.pt'
-    results_file = str(log_dir / 'results.txt')
+    weights_directory = f'{logging_directory}/weights'
+    os.makedirs(weights_directory, exist_ok=True)
+    last_weights_directory = weights_directory + '/last.pt'
+    best_weights_directory = weights_directory + '/best.pt'
+    results_file = f'{logging_directory}/results.txt'
 
     # Configure
     cuda = device.type != 'cpu'
@@ -222,8 +220,8 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
             pbar.set_description(s)
             # Plot
             if ni < 3:
-                f = str(log_dir / ('train_batch%g.jpg' % ni))  # filename
-                result = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
+                result = plot_images(images=imgs, targets=targets, paths=paths,
+                                     fname=f'{logging_directory}/train_batch{ni}.jpg')
                 if tb_writer and result is not None:
                     tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
                     # tb_writer.add_graph(model, imgs)  # add model to tensorboard
@@ -244,7 +242,7 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
             batch_size=batch_size,
             img_size=img_size,
             dataloader=test_dataloader,
-            save_dir=log_dir)
+            save_dir=logging_directory)
         results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
                           'Recall': str(round(results[1], 2)),
                           'mAP': str(round(results[2], 2)), 'F1': str(round(results[3], 2))}
@@ -270,17 +268,17 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
                           'optimizer': None if final_epoch else optimizer.state_dict()}
 
         # Save last, best and delete
-        torch.save(checkpoint, last)
+        torch.save(checkpoint, last_weights_directory)
         if best_fitness == fi:
-            torch.save(checkpoint, best)
+            torch.save(checkpoint, best_weights_directory)
         del checkpoint
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
 
     # Strip optimizers
     n = ('_' if len(name) and not name.isnumeric() else '') + name
-    fresults, flast, fbest = 'results%s.txt' % n, wdir + 'last%s.pt' % n, wdir + 'best%s.pt' % n
-    for f1, f2 in zip([wdir + 'last.pt', wdir + 'best.pt', 'results.txt'], [flast, fbest, fresults]):
+    fresults, flast, fbest = f'results{n}.txt', f'{weights_directory}/last{n}.pt', f'{weights_directory}/best{n}.pt'
+    for f1, f2 in zip([last_weights_directory, best_weights_directory, results_file], [flast, fbest, fresults]):
         if os.path.exists(f1):
             os.rename(f1, f2)  # rename
             ispt = f2.endswith('.pt')  # is *.pt
@@ -305,7 +303,7 @@ if __name__ == '__main__':
     resume = False
     name = ''
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logdir = 'runs/'
+    logging_directory = 'runs/'
     workers = 8
     assert cfg is not None or weights is not None
 
@@ -319,4 +317,4 @@ if __name__ == '__main__':
 
     train(hyperparameters, device, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
-          img_size=img_size, resume=resume, name=name, logdir=logdir, workers=workers)
+          img_size=img_size, resume=resume, name=name, logging_directory=logging_directory, workers=workers)
