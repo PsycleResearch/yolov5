@@ -1,14 +1,12 @@
-import math
-import os
-import time
 import logging
+import math
+import time
 from copy import deepcopy
 
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +49,6 @@ def initialize_weights(model):
             m.inplace = True
 
 
-def find_modules(model, mclass=nn.Conv2d):
-    # Finds layer indices matching module class 'mclass'
-    return [i for i, m in enumerate(model.module_list) if isinstance(m, mclass)]
-
-
 def sparsity(model):
     # Return global model sparsity
     a, b = 0., 0.
@@ -63,17 +56,6 @@ def sparsity(model):
         a += p.numel()
         b += (p == 0).sum()
     return b / a
-
-
-def prune(model, amount=0.3):
-    # Prune model to requested global sparsity
-    import torch.nn.utils.prune as prune
-    print('Pruning model... ', end='')
-    for name, m in model.named_modules():
-        if isinstance(m, nn.Conv2d):
-            prune.l1_unstructured(m, name='weight', amount=amount)  # prune
-            prune.remove(m, 'weight')  # make permanent
-    print(' %.3g global sparsity' % sparsity(model))
 
 
 def fuse_conv_and_bn(conv, bn):
@@ -120,27 +102,6 @@ def model_info(model, verbose=False):
 
     logger.info(
         'Model Summary: %g layers, %g parameters, %g gradients%s' % (len(list(model.parameters())), n_p, n_g, fs))
-
-
-def load_classifier(name='resnet101', n=2):
-    # Loads a pretrained model reshaped to n-class output
-    model = models.__dict__[name](pretrained=True)
-
-    # Display model properties
-    input_size = [3, 224, 224]
-    input_space = 'RGB'
-    input_range = [0, 1]
-    mean = [0.485, 0.456, 0.406]
-    std = [0.229, 0.224, 0.225]
-    for x in ['input_size', 'input_space', 'input_range', 'mean', 'std']:
-        print(x + ' =', eval(x))
-
-    # Reshape output to n classes
-    filters = model.fc.weight.shape[1]
-    model.fc.bias = nn.Parameter(torch.zeros(n), requires_grad=True)
-    model.fc.weight = nn.Parameter(torch.zeros(n, filters), requires_grad=True)
-    model.fc.out_features = n
-    return model
 
 
 def scale_img(img, ratio=1.0, same_shape=False):  # img(16,3,256,416), r=ratio
