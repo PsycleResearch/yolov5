@@ -44,8 +44,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     if weights is not None:
         # Load pretrained model
         checkpoint = torch.load(weights, map_location=device)  # load checkpoint
-        print(checkpoint['model'])
-        print("++++++++++++++")
         print(checkpoint['model'].yaml)
         print("++++++++++++++")
         print(checkpoint['model'].float().state_dict())
