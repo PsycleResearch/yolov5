@@ -381,13 +381,12 @@ def compute_loss(predictions, targets, model):
 
         nb_targets = image.shape[0]  # number of targets
         if nb_targets:
-            print(nb_targets)
             nb_targets_total += nb_targets  # cumulative targets
-            ps = layer_predictions[image, anchor, gridy, gridx]  # prediction subset corresponding to targets
+            prediction_subset = layer_predictions[image, anchor, gridy, gridx]
 
             # Regression
-            pxy = ps[:, :2].sigmoid() * 2. - 0.5
-            pwh = (ps[:, 2:4].sigmoid() * 2) ** 2 * anchors[layer_index]
+            pxy = prediction_subset[:, :2].sigmoid() * 2. - 0.5
+            pwh = (prediction_subset[:, 2:4].sigmoid() * 2) ** 2 * anchors[layer_index]
             pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
             giou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)  # giou(prediction, target)
             lbox += (1.0 - giou).mean()  # giou loss
@@ -397,12 +396,9 @@ def compute_loss(predictions, targets, model):
 
             # Classification
             if model.nb_classes > 1:  # cls loss (only if multiple classes)
-                t = torch.full_like(ps[:, 5:], cn, device=device)  # targets
+                t = torch.full_like(prediction_subset[:, 5:], cn, device=device)  # targets
                 t[range(nb_targets), tcls[layer_index]] = cp
-                lcls += BCEcls(ps[:, 5:], t)  # BCE
-        else:
-            print(nb_targets)
-            exit()
+                lcls += BCEcls(prediction_subset[:, 5:], t)  # BCE
 
         lobj += BCEobj(layer_predictions[..., 4], tobj) * balance[layer_index]  # obj loss
 
