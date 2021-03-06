@@ -37,10 +37,10 @@ def test(model,
 
     seen = 0
     names = model.names if hasattr(model, 'names') else model.module.names
-    coco91class = coco80_to_coco91_class()
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
     loss = torch.zeros(3, device=device)
     jdict, stats, ap, ap_class = [], [], [], []
+    print("VALIDATING")
     for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
