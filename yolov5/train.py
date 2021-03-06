@@ -25,10 +25,11 @@ logger = logging.getLogger(__name__)
 import streamlit as st
 
 
-def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights=None, epochs=2, batch_size=1,
+def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
           logging_directory='runs/',
-          cfg='', resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
+          cfg: str = None, resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
           test_list_path='text.txt', classes=[]):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     weights_directory = f'{logging_directory}/weights'
     os.makedirs(weights_directory, exist_ok=True)
     last_weights_directory = weights_directory + '/last.pt'
@@ -222,10 +223,6 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
             if ni < 3:
                 result = plot_images(images=imgs, targets=targets, paths=paths,
                                      fname=f'{logging_directory}/train_batch{ni}.jpg')
-                if tb_writer and result is not None:
-                    tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
-                    # tb_writer.add_graph(model, imgs)  # add model to tensorboard
-
             # end batch ------------------------------------------------------------------------------------------------
 
         # Scheduler
@@ -300,21 +297,22 @@ if __name__ == '__main__':
     epochs = 8
     batch_size = 8
     img_size = 640
-    resume = False
+    resume = False  # can also be a string for the desired checkpoint
     name = ''
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging_directory = 'runs/'
     workers = 8
-    assert cfg is not None or weights is not None
 
     if resume:
+        assert cfg is not None
         checkpoint = resume if isinstance(resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(checkpoint), 'ERROR: --resume checkpoint does not exist'
-        cfg, weights, resume = '', checkpoint, True
+        weights = checkpoint
+    else:
+        assert weights is not None
 
     with open(hyperparameters_path) as f:
         hyperparameters = json.load(f)
 
-    train(hyperparameters, device, weights, cfg=cfg, train_list_path=train_list_path,
+    train(hyperparameters, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           img_size=img_size, resume=resume, name=name, logging_directory=logging_directory, workers=workers)
