@@ -44,11 +44,10 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8, mosaic=False):
+def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
     dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                   augment=augment,  # augment images
-                                  mosaic=mosaic,
                                   hyperparameters=hyperparameters,
                                   stride=int(stride))
 
@@ -65,8 +64,9 @@ def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = N
 
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
-    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None, image_weights=False,
-                 stride=32, mosaic=False):
+    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None,
+                 image_weights=False,
+                 stride=32):
         try:
             f = []  # image files
             for p in path if isinstance(path, list) else [path]:
@@ -93,9 +93,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.batch = bi  # batch index of image
         self.img_size = img_size
         self.augment = augment
-        self.hyp = hyperparameters
+        self.hyperparameters = hyperparameters
         self.image_weights = image_weights
-        self.mosaic = mosaic
+        self.mosaic = self.hyperparameters['augmentation_mosaic']
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
 
@@ -227,7 +227,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         if self.image_weights:
             index = self.indices[index]
 
-        hyp = self.hyp
+        hyp = self.hyperparameters
         if self.mosaic:
             # Load mosaic
             img, labels = load_mosaic(self, index)
@@ -399,11 +399,11 @@ def load_mosaic(self, index):
     # Augment
     # img4 = img4[s // 2: int(s * 1.5), s // 2:int(s * 1.5)]  # center crop (WARNING, requires box pruning)
     img4, labels4 = random_perspective(img4, labels4,
-                                       degrees=self.hyp['degrees'],
-                                       translate=self.hyp['translate'],
-                                       scale=self.hyp['scale'],
-                                       shear=self.hyp['shear'],
-                                       perspective=self.hyp['perspective'],
+                                       degrees=self.hyperparameters['degrees'],
+                                       translate=self.hyperparameters['translate'],
+                                       scale=self.hyperparameters['scale'],
+                                       shear=self.hyperparameters['shear'],
+                                       perspective=self.hyperparameters['perspective'],
                                        border=self.mosaic_border)  # border to remove
 
     return img4, labels4
@@ -535,6 +535,7 @@ def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1):  # box1(4,n),
     w2, h2 = box2[2] - box2[0], box2[3] - box2[1]
     ar = np.maximum(w2 / (h2 + 1e-16), h2 / (w2 + 1e-16))  # aspect ratio
     return (w2 > wh_thr) & (h2 > wh_thr) & (w2 * h2 / (w1 * h1 + 1e-16) > area_thr) & (ar < ar_thr)  # candidates
+
 
 def create_folder(path='./new'):
     # Create folder

@@ -28,7 +28,7 @@ import streamlit as st
 def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
           logging_directory='runs/',
           cfg: str = None, resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
-          test_list_path='text.txt', classes=[]):
+          test_list_path='text.txt', classes=[], augment=True):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     weights_directory = f'{logging_directory}/weights'
     os.makedirs(weights_directory, exist_ok=True)
@@ -122,7 +122,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     # Trainloader
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
                                                         hyperparameters=hyperparameters,
-                                                        augment=True,
+                                                        augment=augment,
                                                         mosaic=False,
                                                         workers=workers)
     nb_batches = len(train_dataloader)
@@ -291,6 +291,7 @@ if __name__ == '__main__':
     name = ''
     logging_directory = 'runs/'
     workers = 8
+    augment = True
 
     if resume:
         assert cfg is not None
@@ -305,4 +306,5 @@ if __name__ == '__main__':
 
     train(hyperparameters, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
-          img_size=img_size, resume=resume, name=name, logging_directory=logging_directory, workers=workers)
+          img_size=img_size, resume=resume, name=name, logging_directory=logging_directory, workers=workers,
+          augment=augment)

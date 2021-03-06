@@ -357,7 +357,7 @@ def compute_loss(p, targets, model):  # predictions, targets, model
     device = targets.device
     lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
     tcls, tbox, indices, anchors = build_targets(p, targets, model)  # targets
-    h = model.hyp  # hyperparameters
+    h = model.hyperparameters  # hyperparameters
 
     # Define criteria
     BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([h['cls_bceloss_positive_weight']])).to(device)
@@ -436,7 +436,7 @@ def build_targets(p, targets, model):
         if nt:
             # Matches
             r = t[:, :, 4:6] / anchors[:, None]  # wh ratio
-            j = torch.max(r, 1. / r).max(2)[0] < model.hyp['anchor_multiple_threshold']  # compare
+            j = torch.max(r, 1. / r).max(2)[0] < model.hyperparameters['anchor_multiple_threshold']  # compare
             # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
             t = t[j]  # filter
 
