@@ -357,17 +357,17 @@ def compute_loss(p, targets, model):  # predictions, targets, model
     device = targets.device
     lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
     tcls, tbox, indices, anchors = build_targets(p, targets, model)  # targets
-    h = model.hyp  # hyperparameters
+    hyperparameters = model.hyperparameters
 
     # Define criteria
-    BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([h['cls_bceloss_positive_weight']])).to(device)
-    BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([h['obj_bceloss_positive_weight']])).to(device)
+    BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([hyperparameters['cls_bceloss_positive_weight']])).to(device)
+    BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([hyperparameters['obj_bceloss_positive_weight']])).to(device)
 
     # Class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
     cp, cn = smooth_BCE(eps=0.0)
 
     # Focal loss
-    g = h['focal_loss_gamma']  # focal loss gamma
+    g = hyperparameters['focal_loss_gamma']  # focal loss gamma
     if g > 0:
         BCEcls, BCEobj = FocalLoss(BCEcls, g), FocalLoss(BCEobj, g)
 
@@ -403,9 +403,9 @@ def compute_loss(p, targets, model):  # predictions, targets, model
         lobj += BCEobj(pi[..., 4], tobj) * balance[i]  # obj loss
 
     s = 3 / np  # output count scaling
-    lbox *= h['giou_loss_gain'] * s
-    lobj *= h['obj_loss_gain'] * s * (1.4 if np == 4 else 1.)
-    lcls *= h['cls_loss_gain'] * s
+    lbox *= hyperparameters['giou_loss_gain'] * s
+    lobj *= hyperparameters['obj_loss_gain'] * s * (1.4 if np == 4 else 1.)
+    lcls *= hyperparameters['cls_loss_gain'] * s
     bs = tobj.shape[0]  # batch size
 
     loss = lbox + lobj + lcls
@@ -436,7 +436,7 @@ def build_targets(p, targets, model):
         if nt:
             # Matches
             r = t[:, :, 4:6] / anchors[:, None]  # wh ratio
-            j = torch.max(r, 1. / r).max(2)[0] < model.hyp['anchor_multiple_threshold']  # compare
+            j = torch.max(r, 1. / r).max(2)[0] < model.hyperparameters['anchor_multiple_threshold']  # compare
             t = t[j]  # filter
 
             # Offsets
