@@ -213,9 +213,9 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
             # s = ('%10s' * 2 + '%10.4g' * 6) % (
             #     '%g/%g' % (, ), , *mloss, targets.shape[0], imgs.shape[-1])
-            pbar.set_description(
-                f'Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}'
-            )
+            # pbar.set_description(
+            #     f'Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}'
+            # )
             # logger.info(('\n' + '%10s' * 8) % ('', '', '', 'obj', 'cls', 'total', 'targets', 'img_size'))
             # end batch ------------------------------------------------------------------------------------------------
 
