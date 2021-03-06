@@ -143,7 +143,7 @@ def train(hyp, device, weights, tb_writer=None, metric_weights=None, epochs=2, b
     ema = ModelEMA(model)
 
     # Trainloader
-    dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, hyp=hyp, augment=True, workers=workers)
+    dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, hyp=hyp, augment=False, workers=workers)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, nc, data, nc - 1)
@@ -340,7 +340,7 @@ if __name__ == '__main__':
     data = 'dataset.yaml'
     hyp = ''
     epochs = 8
-    batch_size = 16
+    batch_size = 8
     img_size = [640, 640]
     resume = False
     name = ''
@@ -364,7 +364,6 @@ if __name__ == '__main__':
     # opt = parser.parse_args()
 
     # Set DDP variables
-    # opt.world_size = 1
     set_logging(-1)
 
     # Resume
