@@ -44,11 +44,12 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8):
+def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8, mosaic=False):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
     dataset = LoadImagesAndLabels(path, imgsz, batch_size,
                                   augment=augment,  # augment images
-                                  hyperparameters=hyperparameters,  # augmentation hyperparameters
+                                  mosaic=mosaic,
+                                  hyperparameters=hyperparameters,
                                   stride=int(stride))
 
     batch_size = min(batch_size, len(dataset))
@@ -65,7 +66,7 @@ def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = N
 
 class LoadImagesAndLabels(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None, image_weights=False,
-                 stride=32):
+                 stride=32, mosaic=False):
         try:
             f = []  # image files
             for p in path if isinstance(path, list) else [path]:
@@ -94,7 +95,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.augment = augment
         self.hyp = hyperparameters
         self.image_weights = image_weights
-        self.mosaic = self.augment  # load 4 images at a time into a mosaic (only during training)
+        self.mosaic = mosaic
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
 
@@ -261,16 +262,17 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         if self.augment:
             # Augment imagespace
-            if not self.mosaic:
+            if self.mosaic:
                 img, labels = random_perspective(img, labels,
-                                                 degrees=hyp['degrees'],
-                                                 translate=hyp['translate'],
-                                                 scale=hyp['scale'],
-                                                 shear=hyp['shear'],
-                                                 perspective=hyp['perspective'])
+                                                 degrees=hyp['augmentation_rotation_degrees'],
+                                                 translate=hyp['augmentation_translation_fraction'],
+                                                 scale=hyp['augmentation_scale_gain'],
+                                                 shear=hyp['augmentation_shear_degrees'],
+                                                 perspective=hyp['augmentation_perspective_fraction'])
 
             # Augment colorspace
-            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+            augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
+                        value_gain=hyp['augmentation_hsv_value'])
 
             # Apply cutouts
             # if random.random() < 0.9:
@@ -331,8 +333,8 @@ def load_image(self, index):
         return self.imgs[index], self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
 
 
-def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):
-    r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
+def augment_hsv(img, hue_gain=0.5, saturation_gain=0.5, value_gain=0.5):
+    r = np.random.uniform(-1, 1, 3) * [hue_gain, saturation_gain, value_gain] + 1  # random gains
     hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
     dtype = img.dtype  # uint8
 
@@ -343,11 +345,6 @@ def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):
 
     img_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val))).astype(dtype)
     cv2.cvtColor(img_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
-
-    # Histogram equalization
-    # if random.random() < 0.2:
-    #     for i in range(3):
-    #         img[:, :, i] = cv2.equalizeHist(img[:, :, i])
 
 
 def load_mosaic(self, index):

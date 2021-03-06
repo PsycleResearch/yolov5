@@ -120,11 +120,12 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
     # Trainloader
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size, hyperparameters=hyperparameters,
                                                         augment=True,
+                                                        mosaic=False,
                                                         workers=workers)
-    nb = len(train_dataloader)  # number of batches
+    nb_batches = len(train_dataloader)
 
     # Testloader
-    exponential_moving_average.updates = start_epoch * nb // accumulate  # set EMA updates
+    exponential_moving_average.updates = start_epoch * nb_batches // accumulate  # set EMA updates
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size, hyperparameters=hyperparameters,
                                            augment=False,
                                            workers=workers)
@@ -142,7 +143,7 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
 
     # Start training
     t0 = time.time()
-    nw = max(3 * nb, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
+    nw = max(3 * nb_batches, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
     maps = np.zeros(len(classes))  # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
     scheduler.last_epoch = start_epoch - 1  # do not move
@@ -173,10 +174,10 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
         mloss = torch.zeros(4, device=device)  # mean losses
         pbar = enumerate(train_dataloader)
         logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
-        pbar = tqdm(pbar, total=nb)  # progress bar
+        pbar = tqdm(pbar, total=nb_batches)  # progress bar
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-            ni = i + nb * epoch  # number integrated batches (since train start)
+            ni = i + nb_batches * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
             # Warmup
