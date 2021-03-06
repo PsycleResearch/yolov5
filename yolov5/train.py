@@ -168,13 +168,8 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             train_dataset.indices = random.choices(range(train_dataset.n), weights=image_weights,
                                                    k=train_dataset.n)  # rand weighted idx
 
-        # Update mosaic border
-        # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
-        # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
-
         mloss = torch.zeros(4, device=device)  # mean losses
         pbar = enumerate(train_dataloader)
-        logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'GIoU', 'obj', 'cls', 'total', 'targets', 'img_size'))
         pbar = tqdm(pbar, total=nb_batches)  # progress bar
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
