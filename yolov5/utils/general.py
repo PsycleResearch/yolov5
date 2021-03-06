@@ -376,35 +376,31 @@ def compute_loss(predictions, targets, model):
     nb_outputs = len(predictions)
     balance = [4.0, 1.0, 0.4]  # if nb_outputs == 3 else [4.0, 1.0, 0.4, 0.1]  # P3-5 or P3-6
     for layer_index, layer_predictions in enumerate(predictions):  # layer index, layer predictions
-        try:
-            image, anchor, gridy, gridx = indices[layer_index]
-            tobj = torch.zeros_like(layer_predictions[..., 0], device=device)  # target obj
+        image, anchor, gridy, gridx = indices[layer_index]
+        tobj = torch.zeros_like(layer_predictions[..., 0], device=device)  # target obj
 
-            nb_targets = image.shape[0]  # number of targets
-            if nb_targets:
-                nb_targets_total += nb_targets  # cumulative targets
-                prediction_subset = layer_predictions[image, anchor, gridy, gridx]
+        nb_targets = image.shape[0]  # number of targets
+        if nb_targets:
+            nb_targets_total += nb_targets  # cumulative targets
+            prediction_subset = layer_predictions[image, anchor, gridy, gridx]
 
-                # Regression
-                pxy = prediction_subset[:, :2].sigmoid() * 2. - 0.5
-                pwh = (prediction_subset[:, 2:4].sigmoid() * 2) ** 2 * anchors[layer_index]
-                pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
-                giou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)  # giou(prediction, target)
-                lbox += (1.0 - giou).mean()  # giou loss
+            # Regression
+            pxy = prediction_subset[:, :2].sigmoid() * 2. - 0.5
+            pwh = (prediction_subset[:, 2:4].sigmoid() * 2) ** 2 * anchors[layer_index]
+            pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
+            giou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)  # giou(prediction, target)
+            lbox += (1.0 - giou).mean()  # giou loss
 
-                # Objectness
-                tobj[image, anchor, gridy, gridx] = (1.0 - model.giou_loss_ratio) + model.giou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
+            # Objectness
+            tobj[image, anchor, gridy, gridx] = (1.0 - model.giou_loss_ratio) + model.giou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
 
-                # Classification
-                if model.nb_classes > 1:  # cls loss (only if multiple classes)
-                    t = torch.full_like(prediction_subset[:, 5:], cn, device=device)  # targets
-                    t[range(nb_targets), tcls[layer_index]] = cp
-                    lcls += BCEcls(prediction_subset[:, 5:], t)  # BCE
+            # Classification
+            if model.nb_classes > 1:  # cls loss (only if multiple classes)
+                t = torch.full_like(prediction_subset[:, 5:], cn, device=device)  # targets
+                t[range(nb_targets), tcls[layer_index]] = cp
+                lcls += BCEcls(prediction_subset[:, 5:], t)  # BCE
 
-            lobj += BCEobj(layer_predictions[..., 4], tobj) * balance[layer_index]  # obj loss
-        except Exception as e:
-            print(e)
-            continue
+        lobj += BCEobj(layer_predictions[..., 4], tobj) * balance[layer_index]  # obj loss
 
     output_count_scaling = 3 / nb_outputs
     lbox *= hyperparameters['giou_loss_gain'] * output_count_scaling
