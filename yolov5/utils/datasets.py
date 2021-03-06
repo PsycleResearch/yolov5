@@ -46,8 +46,7 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False,
-                      world_size=1, workers=8):
+def create_dataloader(path, imgsz, batch_size, stride, hyp=None, augment=False, workers=8):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
     with torch_distributed_zero_first(-1):
         dataset = LoadImagesAndLabels(path, imgsz, batch_size,
@@ -56,7 +55,7 @@ def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=Fa
                                       stride=int(stride))
 
     batch_size = min(batch_size, len(dataset))
-    nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])  # number of workers
+    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])  # number of workers
     train_sampler = None
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
