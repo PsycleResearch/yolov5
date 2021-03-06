@@ -169,9 +169,9 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                                                    k=train_dataset.n)  # rand weighted idx
 
         mloss = torch.zeros(4, device=device)  # mean losses
-        pbar = enumerate(train_dataloader)
-        pbar = tqdm(pbar, total=nb_batches)  # progress bar
+        pbar = tqdm(enumerate(train_dataloader), total=nb_batches)  # progress bar
         optimizer.zero_grad()
+
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb_batches * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
