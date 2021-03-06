@@ -112,13 +112,15 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
 
     # Image sizes
     grid_size = int(max(model.stride))  # max stride
-    assert img_size == math.ceil(img_size / grid_size) * grid_size, f'img_size ({img_size}) must be a multiple of max stride ({grid_size})'
+    assert img_size == math.ceil(
+        img_size / grid_size) * grid_size, f'img_size ({img_size}) must be a multiple of max stride ({grid_size})'
 
     # Exponential moving average
     exponential_moving_average = ModelEMA(model)
 
     # Trainloader
-    train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size, hyperparameters=hyperparameters,
+    train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
+                                                        hyperparameters=hyperparameters,
                                                         augment=True,
                                                         mosaic=False,
                                                         workers=workers)
@@ -126,7 +128,8 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
 
     # Testloader
     exponential_moving_average.updates = start_epoch * nb_batches // accumulate  # set EMA updates
-    test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size, hyperparameters=hyperparameters,
+    test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
+                                           hyperparameters=hyperparameters,
                                            augment=False,
                                            workers=workers)
 
@@ -242,7 +245,7 @@ def train(hyperparameters: dict, device, weights, tb_writer=None, metric_weights
                                                                    'module') else exponential_moving_average.ema,
             classes=classes,
             batch_size=batch_size,
-            imgsz=img_size,
+            img_size=img_size,
             dataloader=test_dataloader,
             save_dir=log_dir)
         results_dict_2 = {'Epoch': str(epoch), 'Precision': str(round(results[0], 2)),
