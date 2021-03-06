@@ -374,8 +374,7 @@ def compute_loss(predictions, targets, model):
     # Losses
     nb_targets = 0
     nb_outputs = len(predictions)
-    print(predictions)
-    exit()
+    print(nb_outputs)
     balance = [4.0, 1.0, 0.4] if nb_outputs == 3 else [4.0, 1.0, 0.4, 0.1]  # P3-5 or P3-6
     for i, pi in enumerate(predictions):  # layer index, layer predictions
         b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
