@@ -436,8 +436,7 @@ def build_targets(p, targets, model):
         if nt:
             # Matches
             r = t[:, :, 4:6] / anchors[:, None]  # wh ratio
-            j = torch.max(r, 1. / r).max(2)[0] < model.hyperparameters['anchor_multiple_threshold']  # compare
-            # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
+            j = torch.max(r, 1. / r).max(2)[0] < model.hyp['anchor_multiple_threshold']  # compare
             t = t[j]  # filter
 
             # Offsets
