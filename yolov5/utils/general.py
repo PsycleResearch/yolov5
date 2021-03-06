@@ -26,8 +26,8 @@ cv2.setNumThreads(0)
 
 def print_scores(class_name, nb_images, nb_targets, precision, recall, map50, map):
     print(
-        f'Class: {class_name} /\tImages: {nb_images} / \tTarget: {nb_targets} / \tPrecision: {precision:.3f}, '
-        f'/ \tRecall: {recall:.3f} / \tmAP@.5: {map50:.3f} / \tmAP@.5:.95: {map:.3f}')
+        f'Class: {class_name} \tImages: {nb_images} \tTarget: {nb_targets} \tPrecision: {precision:.3f} '
+        f'\tRecall: {recall:.3f} \tmAP@.5: {map50:.3f} \tmAP@.5:.95: {map:.3f}')
 
 
 def get_latest_run(search_dir='./runs'):
