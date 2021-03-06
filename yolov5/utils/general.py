@@ -491,9 +491,9 @@ def compute_loss(p, targets, model):  # predictions, targets, model
         lobj += BCEobj(pi[..., 4], tobj) * balance[i]  # obj loss
 
     s = 3 / np  # output count scaling
-    lbox *= h['giou'] * s
-    lobj *= h['obj'] * s * (1.4 if np == 4 else 1.)
-    lcls *= h['cls'] * s
+    lbox *= h['giou_loss_gain'] * s
+    lobj *= h['obj_loss_gain'] * s * (1.4 if np == 4 else 1.)
+    lcls *= h['cls_loss_gain'] * s
     bs = tobj.shape[0]  # batch size
 
     loss = lbox + lobj + lcls
