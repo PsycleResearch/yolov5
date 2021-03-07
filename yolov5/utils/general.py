@@ -421,10 +421,10 @@ def build_targets(p, targets, model):
     ai = torch.arange(nb_anchors, device=targets.device).float().view(nb_anchors, 1).repeat(1, nb_targets)  # same as .repeat_interleave(nt)
     targets = torch.cat((targets.repeat(nb_anchors, 1, 1), ai[:, :, None]), 2)  # append anchor indices
 
-    g = 0.5  # bias
+    bias = 0.5  # bias
     off = torch.tensor([[0, 0],
                         [1, 0], [0, 1], [-1, 0], [0, -1],  # j,k,l,m
-                        ], device=targets.device).float() * g  # offsets
+                        ], device=targets.device).float() * bias  # offsets
 
     for i in range(detect_module.nb_detection_layers):
         anchors = detect_module.anchors[i]
@@ -441,8 +441,8 @@ def build_targets(p, targets, model):
             # Offsets
             gxy = t[:, 2:4]  # grid xy
             gxi = gain[[2, 3]] - gxy  # inverse
-            j, k = ((gxy % 1. < g) & (gxy > 1.)).T
-            l, m = ((gxi % 1. < g) & (gxi > 1.)).T
+            j, k = ((gxy % 1. < bias) & (gxy > 1.)).T
+            l, m = ((gxi % 1. < bias) & (gxi > 1.)).T
             j = torch.stack((torch.ones_like(j), j, k, l, m))
             t = t.repeat((5, 1, 1))[j]
             offsets = (torch.zeros_like(gxy)[None] + off[:, None])[j]
@@ -451,7 +451,7 @@ def build_targets(p, targets, model):
             offsets = 0
 
         # Define
-        b, c = t[:, :2].long().T  # image, class
+        image, cls = t[:, :2].long().T  # image, class
         gxy = t[:, 2:4]  # grid xy
         gwh = t[:, 4:6]  # grid wh
         gij = (gxy - offsets).long()
@@ -459,10 +459,10 @@ def build_targets(p, targets, model):
 
         # Append
         a = t[:, 6].long()  # anchor indices
-        indices.append((b, a, gj, gi))  # image, anchor, grid indices
+        indices.append((image, a, gj, gi))  # image, anchor, grid indices
         tbox.append(torch.cat((gxy - gij, gwh), 1))  # box
         anch.append(anchors[a])  # anchors
-        tcls.append(c)  # class
+        tcls.append(cls)  # class
 
     return tcls, tbox, indices, anch
 
