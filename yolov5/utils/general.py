@@ -468,7 +468,7 @@ def build_targets(p, targets, model):
     return tcls, tbox, indices, anch
 
 
-def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, merge=False, classes=None, agnostic=False):
+def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, classes=None, agnostic=False):
     """Performs Non-Maximum Suppression (NMS) on inference results
 
     Returns:
@@ -477,85 +477,69 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, merge=False, 
     if prediction.dtype is torch.float16:
         prediction = prediction.float()  # to FP32
 
-    nc = prediction[0].shape[1] - 5  # number of classes
-    xc = prediction[..., 4] > conf_thres  # candidates
+    nb_classes = prediction[0].shape[1] - 5  # number of classes
+    candidates = prediction[..., 4] > conf_thres  # candidates
 
-    # Settings
-    min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
-    max_det = 300  # maximum number of detections per image
-    time_limit = 10.0  # seconds to quit after
-    redundant = True  # require redundant detections
-    multi_label = nc > 1  # multiple labels per box (adds 0.5ms/img)
+    min_box_width, max_box_height = 2, 4096  # pixels
+    max_nb_detections_per_image = 300
+    multi_label = nb_classes > 1
 
-    t = time.time()
     output = [None] * prediction.shape[0]
-    for xi, x in enumerate(prediction):  # image index, image inference
+    for image_index, image_inference in enumerate(prediction):
         # Apply constraints
-        x = x[xc[xi]]  # confidence
+        image_inference = image_inference[candidates[image_index]]  # confidence
 
         # If none remain process next image
-        if not x.shape[0]:
+        if not image_inference.shape[0]:
             continue
 
         # Compute conf
-        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+        image_inference[:, 5:] *= image_inference[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
-        box = xywh2xyxy(x[:, :4])
+        box = xywh2xyxy(image_inference[:, :4])
 
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
-            i, j = (x[:, 5:] > conf_thres).nonzero(as_tuple=False).T
-            x = torch.cat((box[i], x[i, j + 5, None], j[:, None].float()), 1)
+            i, j = (image_inference[:, 5:] > conf_thres).nonzero(as_tuple=False).T
+            image_inference = torch.cat((box[i], image_inference[i, j + 5, None], j[:, None].float()), 1)
         else:  # best class only
-            conf, j = x[:, 5:].max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float()), 1)[conf.view(-1) > conf_thres]
+            conf, j = image_inference[:, 5:].max(1, keepdim=True)
+            image_inference = torch.cat((box, conf, j.float()), 1)[conf.view(-1) > conf_thres]
 
         # Filter by class
         if classes:
-            x = x[(x[:, 5:6] == torch.tensor(classes, device=x.device)).any(1)]
+            image_inference = image_inference[(image_inference[:, 5:6] == torch.tensor(classes, device=image_inference.device)).any(1)]
 
         # If none remain process next image
-        n = x.shape[0]  # number of boxes
+        n = image_inference.shape[0]  # number of boxes
         if not n:
             continue
 
         # Batched NMS
-        c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
-        boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
+        c = image_inference[:, 5:6] * (0 if agnostic else max_box_height)  # classes
+        boxes, scores = image_inference[:, :4] + c, image_inference[:, 4]  # boxes (offset by class), scores
         i = torchvision.ops.boxes.nms(boxes, scores, iou_thres)
-        if i.shape[0] > max_det:  # limit detections
-            i = i[:max_det]
-        if merge and (1 < n < 3E3):  # Merge NMS (boxes merged using weighted mean)
-            try:  # update boxes as boxes(i,4) = weights(i,n) * boxes(n,4)
-                iou = box_iou(boxes[i], boxes) > iou_thres  # iou matrix
-                weights = iou * scores[None]  # box weights
-                x[i, :4] = torch.mm(weights, x[:, :4]).float() / weights.sum(1, keepdim=True)  # merged boxes
-                if redundant:
-                    i = i[iou.sum(1) > 1]  # require redundancy
-            except:  # possible CUDA error https://github.com/ultralytics/yolov3/issues/1139
-                print(x, i, x.shape, i.shape)
-                pass
+        if i.shape[0] > max_nb_detections_per_image:  # limit detections
+            i = i[:max_nb_detections_per_image]
 
-        output[xi] = x[i]
-        if (time.time() - t) > time_limit:
-            break  # time limit exceeded
+        output[image_index] = image_inference[i]
 
     return output
 
 
-def strip_optimizer(f='weights/best.pt', s=''):  # from utils.general import *; strip_optimizer()
+def strip_optimizer(file_path='weights/best.pt'):
     # Strip optimizer from 'f' to finalize training, optionally save as 's'
-    x = torch.load(f, map_location=torch.device('cpu'))
+    x = torch.load(file_path, map_location=torch.device('cpu'))
     x['optimizer'] = None
     x['training_results'] = None
     x['epoch'] = -1
     x['model'].half()  # to FP16
     for p in x['model'].parameters():
         p.requires_grad = False
-    torch.save(x, s or f)
-    mb = os.path.getsize(s or f) / 1E6  # filesize
-    print('Optimizer stripped from %s,%s %.1fMB' % (f, (' saved as %s,' % s) if s else '', mb))
+    torch.save(x, file_path)
+    mb = os.path.getsize(file_path) / 1E6  # filesize
+    print('Optimizer stripped from %s: %.1fMB' % (file_path, mb))
 
 
 def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=1000, verbose=True):

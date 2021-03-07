@@ -10,11 +10,10 @@ from yolov5.utils.general import (
 
 
 def test(model,
-         conf_thres=0.001,
-         iou_thres=0.6,  # for NMS
-         dataloader=None,
-         save_dir='',
-         merge=False):
+         conf_thres,
+         iou_thres,
+         dataloader,
+         save_dir):
     # Initialize/load model and set device
     device = next(model.parameters()).device  # get model device
 
@@ -42,7 +41,7 @@ def test(model,
 
         with torch.no_grad():
             inf_out, train_out = model(img)
-            output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, merge=merge)
+            output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres)
 
         # Statistics per image
         for si, pred in enumerate(output):

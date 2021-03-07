@@ -29,7 +29,8 @@ def fitness(precision, recall, map50, map, metric_weights: list):
 
 def train(hyperparameters: dict, weights: str, metric_weights: list = None, epochs: int = 2, batch_size: int = 1,
           logging_directory: str = 'runs/', accumulate: int = 1,
-          cfg: str = None, resume: bool = False, img_size: int = 640, workers: int = 8, train_list_path: str = 'train.txt',
+          cfg: str = None, resume: bool = False, img_size: int = 640, workers: int = 8,
+          train_list_path: str = 'train.txt',
           test_list_path: str = 'text.txt', classes: list = [], augment: bool = True, cache_images: bool = False):
     is_cuda_available = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda_available else 'cpu')
@@ -164,7 +165,9 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
         test_precision, test_recall, test_mAP50, test_mAP = test(
             model=model,
             dataloader=test_dataloader,
-            save_dir=logging_directory)
+            save_dir=logging_directory,
+            conf_thres=0.1,
+            iou_thres=0.6)
 
         # Update best mAP
         fitness_i = fitness(test_precision, test_recall, test_mAP50, test_mAP, metric_weights)
