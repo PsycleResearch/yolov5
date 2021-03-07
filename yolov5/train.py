@@ -220,7 +220,7 @@ if __name__ == '__main__':
     cfg = None  # In case we resume
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
-    classes = ['copper']
+    classes = ['not_ok', 'ok']
     hyperparameters_path = 'data/hyp.json'
     epochs = 8
     batch_size = 8
