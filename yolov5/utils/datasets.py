@@ -44,54 +44,50 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(path, imgsz, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8, cache_images=False):
-    # Make sure only the first process in DDP process the dataset first, and the following others can use the cache.
-    dataset = LoadImagesAndLabels(path, imgsz, batch_size,
+def create_dataloader(list_path, img_size, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8, cache_images=False):
+    dataset = LoadImagesAndLabels(list_path, img_size, batch_size,
                                   augment=augment,  # augment images
                                   hyperparameters=hyperparameters,
                                   stride=int(stride),
                                   cache_images=cache_images)
 
     batch_size = min(batch_size, len(dataset))
-    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])  # number of workers
-    train_sampler = None
+    nb_workers = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
-                                             num_workers=nw,
-                                             sampler=train_sampler,
+                                             num_workers=nb_workers,
                                              pin_memory=True,
                                              collate_fn=LoadImagesAndLabels.collate_fn)
     return dataloader, dataset
 
 
-class LoadImagesAndLabels(Dataset):  # for training/testing
-    def __init__(self, path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None,
+class LoadImagesAndLabels(Dataset):
+    def __init__(self, list_path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None,
                  image_weights=False,
                  stride=32, cache_images=False):
         try:
-            f = []  # image files
-            for p in path if isinstance(path, list) else [path]:
-                p = str(Path(p))  # os-agnostic
+            image_files = []
+            for p in list_path if isinstance(list_path, list) else [list_path]:
+                p = str(Path(p))
                 parent = str(Path(p).parent) + os.sep
-                if os.path.isfile(p):  # file
+                if os.path.isfile(p):
                     with open(p, 'r') as t:
                         t = t.read().splitlines()
-                        f += [x.replace('./', parent) if x.startswith('./') else x for x in t]  # local to global path
+                        image_files += [x.replace('./', parent) if x.startswith('./') else x for x in t]  # local to global path
                 elif os.path.isdir(p):  # folder
-                    f += glob.iglob(p + os.sep + '*.*')
+                    image_files += glob.iglob(p + os.sep + '*.*')
                 else:
                     raise Exception('%s does not exist' % p)
-            self.img_files = sorted([x.replace('/', os.sep) for x in f])
+            self.img_files = sorted([x.replace('/', os.sep) for x in image_files])
         except Exception as e:
-            raise Exception('Error loading data from %s: %s\nSee %s' % (path, e, help_url))
+            raise Exception('Error loading data from %s: %s\nSee %s' % (list_path, e, help_url))
 
         n = len(self.img_files)
-        assert n > 0, 'No images found in %s. See %s' % (path, help_url)
-        bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
-        nb = bi[-1] + 1  # number of batches
+        assert n > 0, 'No images found in %s. See %s' % (list_path, help_url)
+        batch_index = np.floor(np.arange(n) / batch_size).astype(np.int)
 
         self.n = n  # number of images
-        self.batch = bi  # batch index of image
+        self.batch = batch_index  # batch index of image
         self.img_size = img_size
         self.augment = augment
         self.hyperparameters = hyperparameters

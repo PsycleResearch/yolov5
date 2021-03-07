@@ -12,7 +12,6 @@ from yolov5.utils.general import (
 def test(model,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
-         augment=False,
          dataloader=None,
          save_dir='',
          merge=False,
@@ -32,35 +31,30 @@ def test(model,
     niou = iouv.numel()
 
     seen = 0
-    # p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
-    jdict, stats, ap, ap_class = [], [], [], []
+    stats = []  # correct, conf, pcls, tcls
     print("VALIDATING")
     for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
-        img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        img /= 255.0
         targets = targets.to(device)
-        nb, _, height, width = img.shape  # batch size, channels, height, width
+        _, _, height, width = img.shape  # batch size, channels, height, width
         whwh = torch.Tensor([width, height, width, height]).to(device)
 
-        # Disable gradients
         with torch.no_grad():
-            # Run model
-            inf_out, train_out = model(img, augment=augment)  # inference and training outputs
-
-            # Run NMS
+            inf_out, train_out = model(img)
             output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres, merge=merge)
 
         # Statistics per image
         for si, pred in enumerate(output):
             labels = targets[targets[:, 0] == si, 1:]
-            nl = len(labels)
-            tcls = labels[:, 0].tolist() if nl else []  # target class
+            nb_labels = len(labels)
+            target_class = labels[:, 0].tolist() if nb_labels else []  # target class
             seen += 1
 
             if pred is None:
-                if nl:
-                    stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
+                if nb_labels:
+                    stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), target_class))
                 continue
 
             # Clip boxes to image bounds
@@ -68,7 +62,7 @@ def test(model,
 
             # Assign all predictions as incorrect
             correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
-            if nl:
+            if nb_labels:
                 detected = []  # target indices
                 tcls_tensor = labels[:, 0]
 
@@ -91,11 +85,11 @@ def test(model,
                             if d not in detected:
                                 detected.append(d)
                                 correct[pi[j]] = ious[j] > iouv  # iou_thres is 1xn
-                                if len(detected) == nl:  # all targets already located in image
+                                if len(detected) == nb_labels:  # all targets already located in image
                                     break
 
             # Append statistics (correct, conf, pcls, tcls)
-            stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
+            stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), target_class))
 
         # Plot images
         if batch_i < 1:

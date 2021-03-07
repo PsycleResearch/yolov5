@@ -26,7 +26,7 @@ def fitness(precision, recall, map50, map, metric_weights: list):
 
 
 def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
-          logging_directory='runs/', accumulate=accumulate,
+          logging_directory='runs/', accumulate=1,
           cfg: str = None, resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
           test_list_path='text.txt', classes=[], augment=True, cache_images=False):
     is_cuda_available = torch.cuda.is_available()
@@ -60,7 +60,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
     # Optimizer
     nominal_batch_size = 64
-    hyperparameters['weight_decay'] *= batch_size * accumulate / nominal_batch_size  # scale weight_decay
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
     for k, v in model.named_parameters():
@@ -73,7 +72,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             pg0.append(v)  # all else
 
     optimizer = optim.Adam(pg0, lr=hyperparameters['lr0'], betas=(hyperparameters['beta1'], 0.999))
-
     optimizer.add_param_group(
         {'params': pg1, 'weight_decay': hyperparameters['weight_decay']})  # add pg1 with weight_decay
     optimizer.add_param_group({'params': pg2})  # add pg2 (biases)
@@ -93,7 +91,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         # Results
         if checkpoint.get('training_results') is not None:
             with open(results_file, 'w') as file:
-                file.write(checkpoint['training_results'])  # write results.txt
+                file.write(checkpoint['training_results'])
 
         # Epochs
         start_epoch = checkpoint['epoch'] + 1
@@ -193,7 +191,8 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
         # Write
         with open(results_file, 'a') as f:
-            f.write(f'EPOCH {epoch} - Precision: {test_precision:.5f} \tRecall: {test_recall:.5f} \tmAP50: {test_mAP50:.5f} \tmAP: {test_mAP:.5f}\n')
+            f.write(
+                f'EPOCH {epoch} - Precision: {test_precision:.5f} \tRecall: {test_recall:.5f} \tmAP50: {test_mAP50:.5f} \tmAP: {test_mAP:.5f}\n')
 
         # Update best mAP
         # fitness_i = weighted combination of [P, R, mAP, F1]
