@@ -205,8 +205,8 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
     # Strip optimizers
     n = ('_' if len(name) and not name.isnumeric() else '') + name
-    fresults, flast, fbest = f'results{n}.txt', f'{weights_directory}/last{n}.pt', f'{weights_directory}/best{n}.pt'
-    for f1, f2 in zip([last_weights_directory, best_weights_directory, results_file], [flast, fbest, fresults]):
+    flast, fbest = f'{weights_directory}/last{n}.pt', f'{weights_directory}/best{n}.pt'
+    for f1, f2 in zip([last_weights_directory, best_weights_directory], [flast, fbest]):
         if os.path.exists(f1):
             os.rename(f1, f2)  # rename
             ispt = f2.endswith('.pt')  # is *.pt
