@@ -2,7 +2,6 @@ import json
 import logging
 import math
 import os
-import time
 
 import numpy as np
 import torch.optim as optim
@@ -16,7 +15,7 @@ from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     labels_to_class_weights, check_anchors, compute_loss, strip_optimizer, get_latest_run)
-from yolov5.utils.torch_utils import init_seeds, intersect_dicts, ModelEMA
+from yolov5.utils.torch_utils import init_seeds, intersect_dicts
 
 logger = logging.getLogger(__name__)
 
