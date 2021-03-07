@@ -439,29 +439,29 @@ def build_targets(p, targets, model):
             t = t[j]  # filter
 
             # Offsets
-            gxy = t[:, 2:4]  # grid xy
-            gxi = gain[[2, 3]] - gxy  # inverse
-            j, k = ((gxy % 1. < bias) & (gxy > 1.)).T
+            grid_x_y = t[:, 2:4]  # grid xy
+            gxi = gain[[2, 3]] - grid_x_y  # inverse
+            j, k = ((grid_x_y % 1. < bias) & (grid_x_y > 1.)).T
             l, m = ((gxi % 1. < bias) & (gxi > 1.)).T
             j = torch.stack((torch.ones_like(j), j, k, l, m))
             t = t.repeat((5, 1, 1))[j]
-            offsets = (torch.zeros_like(gxy)[None] + off[:, None])[j]
+            offsets = (torch.zeros_like(grid_x_y)[None] + off[:, None])[j]
         else:
             t = targets[0]
             offsets = 0
 
         # Define
         image, cls = t[:, :2].long().T  # image, class
-        gxy = t[:, 2:4]  # grid xy
-        gwh = t[:, 4:6]  # grid wh
-        gij = (gxy - offsets).long()
-        gi, gj = gij.T  # grid xy indices
+        grid_x_y = t[:, 2:4]  # grid xy
+        grid_width_height = t[:, 4:6]  # grid wh
+        grid_i_j = (grid_x_y - offsets).long()
+        grid_x_y_i, grid_x_y_j = grid_i_j.T  # grid xy indices
 
         # Append
-        a = t[:, 6].long()  # anchor indices
-        indices.append((image, a, gj, gi))  # image, anchor, grid indices
-        tbox.append(torch.cat((gxy - gij, gwh), 1))  # box
-        anch.append(anchors[a])  # anchors
+        anchor_indices = t[:, 6].long()  # anchor indices
+        indices.append((image, anchor_indices, grid_x_y_j, grid_x_y_i))  # image, anchor, grid indices
+        tbox.append(torch.cat((grid_x_y - grid_i_j, grid_width_height), 1))  # box
+        anch.append(anchors[anchor_indices])  # anchors
         tcls.append(cls)  # class
 
     return tcls, tbox, indices, anch
