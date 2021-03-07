@@ -112,9 +112,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     assert img_size == math.ceil(
         img_size / grid_size) * grid_size, f'img_size ({img_size}) must be a multiple of max stride ({grid_size})'
 
-    # Exponential moving average
-    exponential_moving_average = ModelEMA(model)
-
     # Trainloader
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
                                                         hyperparameters=hyperparameters,
@@ -123,14 +120,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                                                         cache_images=cache_images)
     nb_batches = len(train_dataloader)
 
-    # Testloader
-    exponential_moving_average.updates = start_epoch * nb_batches // accumulate  # set EMA updates
-    test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
-                                           hyperparameters=hyperparameters,
-                                           augment=False,
-                                           workers=workers,
-                                           cache_images=cache_images)
-
     # Model parameters
     hyperparameters['cls_loss_gain'] *= nb_classes / 80.  # scale coco-tuned hyp['cls'] to current dataset
     model.nb_classes = nb_classes  # attach number of classes to model
@@ -138,6 +127,17 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     model.giou_loss_ratio = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
     model.class_weights = labels_to_class_weights(train_dataset.labels, nb_classes).to(device)  # attach class weights
     model.classes = classes
+
+    # Exponential moving average
+    exponential_moving_average = ModelEMA(model)
+
+    # Testloader
+    exponential_moving_average.updates = start_epoch * nb_batches // accumulate  # set EMA updates
+    test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
+                                           hyperparameters=hyperparameters,
+                                           augment=False,
+                                           workers=workers,
+                                           cache_images=cache_images)
 
     # Check anchors
     check_anchors(train_dataset, model=model, thr=hyperparameters['anchor_multiple_threshold'], img_size=img_size)
