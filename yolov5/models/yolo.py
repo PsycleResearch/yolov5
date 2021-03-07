@@ -22,7 +22,7 @@ class Detect(nn.Module):
 
     def __init__(self, nb_classes=80, anchors=(), ch=()):  # detection layer
         super(Detect, self).__init__()
-        self.nc = nb_classes  # number of classes
+        self.nb_classes = nb_classes  # number of classes
         self.no = nb_classes + 5  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
         self.na = len(anchors[0]) // 2  # number of anchors
