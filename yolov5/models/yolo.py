@@ -99,12 +99,11 @@ class Model(nn.Module):
         return x
 
     def _initialize_biases(self, cf=None):  # initialize biases into Detect(), cf is class frequency
-        # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1.
         m = self.model[-1]  # Detect() module
         for mi, s in zip(m.m, m.stride):  # from
-            b = mi.bias.view(m.na, -1)  # conv.bias(255) to (3,85)
+            b = mi.bias.view(m.nb_anchors, -1)  # conv.bias(255) to (3,85)
             b[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
-            b[:, 5:] += math.log(0.6 / (m.nc - 0.99)) if cf is None else torch.log(cf / cf.sum())  # cls
+            b[:, 5:] += math.log(0.6 / (m.nb_classes - 0.99)) if cf is None else torch.log(cf / cf.sum())  # cls
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers
@@ -128,7 +127,7 @@ def parse_model(model_dict, input_channels):
     assert model_dict['head'][-1][3][0] == 'nc'
     model_dict['head'][-1][3][0] = 'nb_classes'
     ###########
-    
+
     anchors, nb_classes, depth_multiple, width_multiple = model_dict['anchors'], model_dict['nb_classes'], model_dict['depth_multiple'], model_dict['width_multiple']
     nb_anchors = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors
     nb_outputs = nb_anchors * (nb_classes + 5)
