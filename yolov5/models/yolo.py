@@ -1,5 +1,4 @@
 import logging
-import logging
 import math
 from copy import deepcopy
 from pathlib import Path
@@ -18,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 class Detect(nn.Module):
     stride = None  # strides computed during build
-    export = False  # onnx export
 
     def __init__(self, nb_classes=80, anchors=(), ch=()):  # detection layer
         super(Detect, self).__init__()
@@ -28,14 +26,12 @@ class Detect(nn.Module):
         self.nb_anchors = len(anchors[0]) // 2
         self.grid = [torch.zeros(1)] * self.nb_detection_layers  # init grid
         a = torch.tensor(anchors).float().view(self.nb_detection_layers, -1, 2)
-        self.register_buffer('anchors', a)  # shape(nl,na,2)
-        self.register_buffer('anchor_grid', a.clone().view(self.nb_detection_layers, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
+        self.register_buffer('anchors', a)  # shape(nb_detection_layers, nb_anchors, 2)
+        self.register_buffer('anchor_grid', a.clone().view(self.nb_detection_layers, 1, -1, 1, 1, 2))  # shape(nb_detection_layers, 1, nb_anchors, 1, 1, 2)
         self.m = nn.ModuleList(nn.Conv2d(x, self.nb_outputs_per_anchor * self.nb_anchors, 1) for x in ch)  # output conv
 
     def forward(self, x):
-        # x = x.copy()  # for profiling
-        z = []  # inference output
-        self.training |= self.export
+        inference_output = []
         for i in range(self.nb_detection_layers):
             x[i] = self.m[i](x[i])  # conv
             bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
@@ -48,9 +44,9 @@ class Detect(nn.Module):
                 y = x[i].sigmoid()
                 y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i].to(x[i].device)) * self.stride[i]  # xy
                 y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
-                z.append(y.view(bs, -1, self.nb_outputs_per_anchor))
+                inference_output.append(y.view(bs, -1, self.nb_outputs_per_anchor))
 
-        return x if self.training else (torch.cat(z, 1), x)
+        return x if self.training else (torch.cat(inference_output, 1), x)
 
     @staticmethod
     def _make_grid(nx=20, ny=20):
@@ -82,7 +78,6 @@ class Model(nn.Module):
             check_anchor_order(m)
             self.stride = m.stride
             self._initialize_biases()  # only run once
-            # print('Strides: %s' % m.stride.tolist())
 
         # Init weights, biases
         initialize_weights(self)
@@ -107,7 +102,6 @@ class Model(nn.Module):
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers
-        # print('Fusing layers... ')
         for m in self.model.modules():
             if type(m) is Conv:
                 m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatability
