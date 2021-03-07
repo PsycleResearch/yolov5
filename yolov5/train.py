@@ -16,7 +16,7 @@ from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
     labels_to_class_weights, check_anchors, compute_loss, strip_optimizer, get_latest_run)
-from yolov5.utils.torch_utils import init_seeds, intersect_dicts
+from yolov5.utils.torch_utils import init_seeds, intersect_dicts, ModelEMA
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,9 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     assert img_size == math.ceil(
         img_size / grid_size) * grid_size, f'img_size ({img_size}) must be a multiple of max stride ({grid_size})'
 
+    # Exponential moving average
+    exponential_moving_average = ModelEMA(model)
+
     # Trainloader
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
                                                         hyperparameters=hyperparameters,
@@ -121,6 +124,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     nb_batches = len(train_dataloader)
 
     # Testloader
+    exponential_moving_average.updates = start_epoch * nb_batches // accumulate  # set EMA updates
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
                                            hyperparameters=hyperparameters,
                                            augment=False,
@@ -182,15 +186,19 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                 scaler.step(optimizer)  # optimizer.step
                 scaler.update()
                 optimizer.zero_grad()
+                if exponential_moving_average:
+                    exponential_moving_average.update(model)
             # end batch ------------------------------------------------------------------------------------------------
 
         # Scheduler
         scheduler.step()
 
         # mAP
+        if exponential_moving_average:
+            exponential_moving_average.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
         final_epoch = epoch + 1 == epochs
         test_precision, test_recall, test_mAP50, test_mAP = test(
-            model=model,
+            model=exponential_moving_average.ema,
             dataloader=test_dataloader,
             save_dir=logging_directory,
             results_file=results_file)
@@ -210,7 +218,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             checkpoint = {'epoch': epoch,
                           'best_fitness': best_fitness,
                           'training_results': f.read(),
-                          'model': model,
+                          'model': exponential_moving_average.ema,
                           'optimizer': None if final_epoch else optimizer.state_dict()}
 
         # Save last, best and delete
