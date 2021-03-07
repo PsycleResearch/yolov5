@@ -198,7 +198,6 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
 
 if __name__ == '__main__':
     weights = 'weights/yolov5s.pt'  # pre-trained weights
-    cfg = None  # In case we resume
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
     classes = ['not_ok', 'ok']
@@ -225,7 +224,7 @@ if __name__ == '__main__':
     with open(hyperparameters_path) as f:
         hyperparameters = json.load(f)
 
-    train(hyperparameters, weights, cfg=cfg, train_list_path=train_list_path,
+    train(hyperparameters, weights, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           accumulate=accumulate,
           img_size=img_size, resume=resume, logging_directory=logging_directory, workers=workers,
