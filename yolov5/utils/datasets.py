@@ -68,8 +68,11 @@ class LoadImagesAndLabels(Dataset):
         try:
             image_files = []
             p = str(Path(list_path))
-            if os.path.isdir(p):  # folder
-                image_files += glob.iglob(p + os.sep + '*.*')
+            parent = str(Path(p).parent) + os.sep
+            if os.path.isfile(p):
+                with open(p, 'r') as t:
+                    t = t.read().splitlines()
+                    image_files += [x.replace('./', parent) if x.startswith('./') else x for x in t]
             else:
                 raise Exception('%s does not exist' % p)
             self.img_files = sorted([x.replace('/', os.sep) for x in image_files])
