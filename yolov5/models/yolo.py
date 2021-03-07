@@ -136,6 +136,7 @@ def parse_model(model_dict, input_channels):
                 pass
 
         _number = max(round(_number * depth_multiple), 1) if _number > 1 else _number  # depth gain
+        print(_module in [nn.Conv2d, Bottleneck, DWConv, MixConv2d, CrossConv, C3])
         if _module in [nn.Conv2d, Conv, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
             channels, output_channels = input_channels[_from], _args[0]
             output_channels = make_divisible(output_channels * width_multiple, 8) if output_channels != nb_outputs else output_channels
