@@ -158,18 +158,17 @@ class LoadImagesAndLabels(Dataset):
         pbar = tqdm(zip(self.img_files, self.label_files), desc='Scanning images', total=len(self.img_files))
         for (img, label) in pbar:
             try:
-                l = []
+                labels = []
                 image = Image.open(img)
-                image.verify()  # PIL verify
-                # _ = io.imread(img)  # skimage verify (from skimage import io)
-                shape = exif_size(image)  # image size
+                image.verify()
+                shape = exif_size(image)
                 assert (shape[0] > 9) & (shape[1] > 9), 'image size <10 pixels'
                 if os.path.isfile(label):
                     with open(label, 'r') as f:
-                        l = np.array([x.split() for x in f.read().splitlines()], dtype=np.float32)  # labels
-                if len(l) == 0:
-                    l = np.zeros((0, 5), dtype=np.float32)
-                x[img] = [l, shape]
+                        labels = np.array([x.split() for x in f.read().splitlines()], dtype=np.float32)
+                if len(labels) == 0:
+                    labels = np.zeros((0, 5), dtype=np.float32)
+                x[img] = [labels, shape]
             except Exception as e:
                 x[img] = [None, None]
                 print('WARNING: %s: %s' % (img, e))
@@ -181,19 +180,12 @@ class LoadImagesAndLabels(Dataset):
     def __len__(self):
         return len(self.img_files)
 
-    # def __iter__(self):
-    #     self.count = -1
-    #     print('ran dataset iter')
-    #     #self.shuffled_vector = np.random.permutation(self.nF) if self.augment else np.arange(self.nF)
-    #     return self
-
     def __getitem__(self, index):
         if self.image_weights:
             index = self.indices[index]
 
         hyp = self.hyperparameters
         if self.mosaic:
-            # Load mosaic
             img, labels = load_mosaic(self, index)
             shapes = None
 
@@ -225,7 +217,7 @@ class LoadImagesAndLabels(Dataset):
                 labels[:, 4] = ratio[1] * h * (x[:, 2] + x[:, 4] / 2) + pad[1]
 
         if self.augment:
-            # Augment imagespace
+            # Augment image space
             if self.mosaic:
                 img, labels = random_perspective(img, labels,
                                                  degrees=hyp['augmentation_rotation_degrees'],
@@ -239,12 +231,8 @@ class LoadImagesAndLabels(Dataset):
                 augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
                             value_gain=hyp['augmentation_hsv_value'])
 
-            # Apply cutouts
-            # if random.random() < 0.9:
-            #     labels = cutout(img, labels)
-
-        nL = len(labels)  # number of labels
-        if nL:
+        nb_labels = len(labels)
+        if nb_labels:
             labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
             labels[:, [2, 4]] /= img.shape[0]  # normalized height 0-1
             labels[:, [1, 3]] /= img.shape[1]  # normalized width 0-1
@@ -253,17 +241,17 @@ class LoadImagesAndLabels(Dataset):
             # flip up-down
             if random.random() < hyp['augmentation_flip_up_down_probability']:
                 img = np.flipud(img)
-                if nL:
+                if nb_labels:
                     labels[:, 2] = 1 - labels[:, 2]
 
             # flip left-right
             if random.random() < hyp['augmentation_flip_left_right_probability']:
                 img = np.fliplr(img)
-                if nL:
+                if nb_labels:
                     labels[:, 1] = 1 - labels[:, 1]
 
-        labels_out = torch.zeros((nL, 6))
-        if nL:
+        labels_out = torch.zeros((nb_labels, 6))
+        if nb_labels:
             labels_out[:, 1:] = torch.from_numpy(labels)
 
         # Convert
@@ -313,8 +301,6 @@ def augment_hsv(img, hue_gain=0.5, saturation_gain=0.5, value_gain=0.5):
 
 
 def load_mosaic(self, index):
-    # loads images in a mosaic
-
     labels4 = []
     s = self.img_size
     yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border]  # mosaic center x, y
@@ -358,11 +344,7 @@ def load_mosaic(self, index):
         # np.clip(labels4[:, 1:] - s / 2, 0, s, out=labels4[:, 1:])  # use with center crop
         np.clip(labels4[:, 1:], 0, 2 * s, out=labels4[:, 1:])  # use with random_affine
 
-        # Replicate
-        # img4, labels4 = replicate(img4, labels4)
-
     # Augment
-    # img4 = img4[s // 2: int(s * 1.5), s // 2:int(s * 1.5)]  # center crop (WARNING, requires box pruning)
     img4, labels4 = random_perspective(img4, labels4,
                                        degrees=self.hyperparameters['augmentation_rotation_degrees'],
                                        translate=self.hyperparameters['augmentation_translation_fraction'],
@@ -408,9 +390,6 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
 
 
 def random_perspective(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0, border=(0, 0)):
-    # torchvision.transforms.RandomAffine(degrees=(-10, 10), translate=(.1, .1), scale=(.9, 1.1), shear=(-10, 10))
-    # targets = [cls, xyxy]
-
     height = img.shape[0] + border[0] * 2  # shape(h,w,c)
     width = img.shape[1] + border[1] * 2
 
@@ -450,12 +429,6 @@ def random_perspective(img, targets=(), degrees=10, translate=.1, scale=.1, shea
         else:  # affine
             img = cv2.warpAffine(img, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
 
-    # Visualize
-    # import matplotlib.pyplot as plt
-    # ax = plt.subplots(1, 2, figsize=(12, 6))[1].ravel()
-    # ax[0].imshow(img[:, :, ::-1])  # base
-    # ax[1].imshow(img2[:, :, ::-1])  # warped
-
     # Transform label coordinates
     n = len(targets)
     if n:
@@ -472,15 +445,6 @@ def random_perspective(img, targets=(), degrees=10, translate=.1, scale=.1, shea
         x = xy[:, [0, 2, 4, 6]]
         y = xy[:, [1, 3, 5, 7]]
         xy = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
-
-        # # apply angle-based reduction of bounding boxes
-        # radians = a * math.pi / 180
-        # reduction = max(abs(math.sin(radians)), abs(math.cos(radians))) ** 0.5
-        # x = (xy[:, 2] + xy[:, 0]) / 2
-        # y = (xy[:, 3] + xy[:, 1]) / 2
-        # w = (xy[:, 2] - xy[:, 0]) * reduction
-        # h = (xy[:, 3] - xy[:, 1]) * reduction
-        # xy = np.concatenate((x - w / 2, y - h / 2, x + w / 2, y + h / 2)).reshape(4, n).T
 
         # clip boxes
         xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
@@ -500,10 +464,3 @@ def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1):  # box1(4,n),
     w2, h2 = box2[2] - box2[0], box2[3] - box2[1]
     ar = np.maximum(w2 / (h2 + 1e-16), h2 / (w2 + 1e-16))  # aspect ratio
     return (w2 > wh_thr) & (h2 > wh_thr) & (w2 * h2 / (w1 * h1 + 1e-16) > area_thr) & (ar < ar_thr)  # candidates
-
-
-def create_folder(path='./new'):
-    # Create folder
-    if os.path.exists(path):
-        shutil.rmtree(path)  # delete output folder
-    os.makedirs(path)  # make new output folder
