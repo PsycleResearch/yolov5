@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 def fitness(precision, recall, map50, map, metric_weights: list):
+    """
+    Weighted combination of precision, recall, mAP50 and mAP
+    """
     return np.array([precision, recall, map50, map] * np.array(metric_weights)).sum()
 
 
@@ -35,7 +38,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     os.makedirs(weights_directory, exist_ok=True)
     last_weights_directory = weights_directory + '/last.pt'
     best_weights_directory = weights_directory + '/best.pt'
-    results_file = f'{logging_directory}/results.txt'
     init_seeds(1)
     nb_classes = len(classes)
 
@@ -88,11 +90,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             optimizer.load_state_dict(checkpoint['optimizer'])
             best_fitness = checkpoint['best_fitness']
 
-        # Results
-        if checkpoint.get('training_results') is not None:
-            with open(results_file, 'w') as file:
-                file.write(checkpoint['training_results'])
-
         # Epochs
         start_epoch = checkpoint['epoch'] + 1
         if resume:
@@ -118,11 +115,11 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     nb_batches = len(train_dataloader)
 
     # Model parameters
-    hyperparameters['cls_loss_gain'] *= nb_classes / 80.  # scale coco-tuned hyp['cls'] to current dataset
-    model.nb_classes = nb_classes  # attach number of classes to model
-    model.hyperparameters = hyperparameters  # attach hyperparameters to model
-    model.giou_loss_ratio = 1.0  # giou loss ratio (obj_loss = 1.0 or giou)
-    model.class_weights = labels_to_class_weights(train_dataset.labels, nb_classes).to(device)  # attach class weights
+    hyperparameters['cls_loss_gain'] *= nb_classes / 80.  # scale coco-tuned cls_loss_gain to current dataset
+    model.nb_classes = nb_classes
+    model.hyperparameters = hyperparameters
+    model.giou_loss_ratio = 1.0
+    model.class_weights = labels_to_class_weights(train_dataset.labels, nb_classes).to(device)
     model.classes = classes
 
     # Exponential moving average
@@ -140,7 +137,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     check_anchors(train_dataset, model=model, thr=hyperparameters['anchor_multiple_threshold'], img_size=img_size)
 
     # Start training
-    t0 = time.time()
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=is_cuda_available)
     logger.info('Starting training for %g epochs...' % epochs)
@@ -186,27 +182,18 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
         test_precision, test_recall, test_mAP50, test_mAP = test(
             model=exponential_moving_average.ema,
             dataloader=test_dataloader,
-            save_dir=logging_directory,
-            results_file=results_file)
-
-        # Write
-        with open(results_file, 'a') as f:
-            f.write(
-                f'EPOCH {epoch} - Precision: {test_precision:.5f} \tRecall: {test_recall:.5f} \tmAP50: {test_mAP50:.5f} \tmAP: {test_mAP:.5f}\n')
+            save_dir=logging_directory)
 
         # Update best mAP
-        # fitness_i = weighted combination of [P, R, mAP, F1]
         fitness_i = fitness(test_precision, test_recall, test_mAP50, test_mAP, metric_weights)
         if fitness_i > best_fitness:
             best_fitness = fitness_i
 
         # Save model
-        with open(results_file, 'r') as f:
-            checkpoint = {'epoch': epoch,
-                          'best_fitness': best_fitness,
-                          'training_results': f.read(),
-                          'model': exponential_moving_average.ema,
-                          'optimizer': None if final_epoch else optimizer.state_dict()}
+        checkpoint = {'epoch': epoch,
+                      'best_fitness': best_fitness,
+                      'model': exponential_moving_average.ema,
+                      'optimizer': None if final_epoch else optimizer.state_dict()}
 
         # Save last, best and delete
         torch.save(checkpoint, last_weights_directory)
@@ -224,8 +211,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
             os.rename(f1, f2)  # rename
             ispt = f2.endswith('.pt')  # is *.pt
             strip_optimizer(f2) if ispt else None  # strip optimizer
-    # Finish
-    logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
 
     torch.cuda.empty_cache()
 

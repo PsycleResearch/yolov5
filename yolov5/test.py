@@ -14,8 +14,7 @@ def test(model,
          iou_thres=0.6,  # for NMS
          dataloader=None,
          save_dir='',
-         merge=False,
-         results_file=None):
+         merge=False):
     # Initialize/load model and set device
     device = next(model.parameters()).device  # get model device
 
