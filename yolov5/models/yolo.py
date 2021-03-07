@@ -54,15 +54,10 @@ class Detect(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg='yolov5s.yaml', channels=3, nb_classes=None):  # model, input channels, number of classes
+    def __init__(self, cfg: dict, channels=3, nb_classes=None):  # model, input channels, number of classes
         super(Model, self).__init__()
-        if isinstance(cfg, dict):  # When loading pretrained weights
-            self.yaml = cfg  # model dict
-        else:  # from scratch
-            import yaml  # for torch hub
-            self.yaml_file = Path(cfg).name
-            with open(cfg) as f:
-                self.yaml = yaml.load(f, Loader=yaml.FullLoader)  # model dict
+        # Loading pretrained weights
+        self.yaml = cfg  # model dict
 
         # Define model
         self.yaml['nb_classes'] = nb_classes  # override pretrained weights nb classes

@@ -29,7 +29,7 @@ def fitness(precision, recall, map50, map, metric_weights: list):
 
 def train(hyperparameters: dict, weights: str, metric_weights: list = None, epochs: int = 2, batch_size: int = 1,
           logging_directory: str = 'runs/', accumulate: int = 1,
-          cfg: str = None, resume: bool = False, img_size: int = 640, workers: int = 8,
+          resume: bool = False, img_size: int = 640, workers: int = 8,
           train_list_path: str = 'train.txt',
           test_list_path: str = 'text.txt', classes: list = [], augment: bool = True, cache_images: bool = False):
     is_cuda_available = torch.cuda.is_available()
@@ -41,16 +41,12 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     init_seeds(1)
     nb_classes = len(classes)
 
-    if weights is not None:
-        # Load pretrained model
-        checkpoint = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(checkpoint['model'].yaml, channels=3, nb_classes=nb_classes).to(device)
-        state_dict = checkpoint['model'].float().state_dict()  # to FP32
-        state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
-        model.load_state_dict(state_dict, strict=False)  # load
-    else:
-        # Create model
-        model = Model(cfg, channels=3, nb_classes=nb_classes).to(device)  # create
+    # Load pretrained model
+    checkpoint = torch.load(weights, map_location=device)  # load checkpoint
+    model = Model(checkpoint['model'].yaml, channels=3, nb_classes=nb_classes).to(device)
+    state_dict = checkpoint['model'].float().state_dict()  # to FP32
+    state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
+    model.load_state_dict(state_dict, strict=False)  # load
 
     # Freeze
     freeze = ['', ]  # parameter names to freeze (full or partial)

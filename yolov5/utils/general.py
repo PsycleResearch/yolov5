@@ -529,7 +529,6 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, classes=None,
 
 
 def strip_optimizer(file_path='weights/best.pt'):
-    # Strip optimizer from 'f' to finalize training, optionally save as 's'
     x = torch.load(file_path, map_location=torch.device('cpu'))
     x['optimizer'] = None
     x['training_results'] = None
