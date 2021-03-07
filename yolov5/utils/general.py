@@ -414,8 +414,8 @@ def compute_loss(predictions, targets, model):
 
 def build_targets(p, targets, model):
     # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
-    detect_module = model.module.model[-1] if is_parallel(model) else model.model[-1]  # Detect() module
-    nb_anchors, nb_targets = detect_module.nb_anchors, targets.shape[0]  # number of anchors, targets
+    detect_module = model.module.model[-1] if is_parallel(model) else model.model[-1]
+    nb_anchors, nb_targets = detect_module.nb_anchors, targets.shape[0]
     tcls, tbox, indices, anch = [], [], [], []
     gain = torch.ones(7, device=targets.device)  # normalized to gridspace gain
     ai = torch.arange(nb_anchors, device=targets.device).float().view(nb_anchors, 1).repeat(1, nb_targets)  # same as .repeat_interleave(nt)
@@ -424,7 +424,6 @@ def build_targets(p, targets, model):
     g = 0.5  # bias
     off = torch.tensor([[0, 0],
                         [1, 0], [0, 1], [-1, 0], [0, -1],  # j,k,l,m
-                        # [1, 1], [1, -1], [-1, 1], [-1, -1],  # jk,jm,lk,lm
                         ], device=targets.device).float() * g  # offsets
 
     for i in range(detect_module.nb_detection_layers):
