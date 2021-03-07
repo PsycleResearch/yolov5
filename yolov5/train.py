@@ -60,9 +60,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
                 print('freezing %s' % k)
                 v.requires_grad = False
 
-    # Optimizer
-    nominal_batch_size = 64
-
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
     for k, v in model.named_parameters():
         v.requires_grad = True
@@ -126,7 +123,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     exponential_moving_average = ModelEMA(model)
 
     # Testloader
-    exponential_moving_average.updates = start_epoch * nb_batches // accumulate  # set EMA updates
+    exponential_moving_average.updates = start_epoch * nb_batches // accumulate
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
                                            hyperparameters=hyperparameters,
                                            augment=False,
@@ -140,24 +137,19 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=is_cuda_available)
     logger.info('Starting training for %g epochs...' % epochs)
-    for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
+    for epoch in range(start_epoch, epochs):
         model.train()
-
-        pbar = tqdm(enumerate(train_dataloader), total=nb_batches)  # progress bar
         optimizer.zero_grad()
 
         mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if is_cuda_available else 0)  # (GB)
         print(f'TRAINING Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}')
-        for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+        for i, (images, targets, paths, _) in tqdm(enumerate(train_dataloader), total=nb_batches):
             nb_integrated_batches = i + nb_batches * epoch
-            imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
+            images = images.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
             # Autocast
             with amp.autocast(enabled=is_cuda_available):
-                # Forward
-                predictions = model(imgs)
-
-                # Loss
+                predictions = model(images)
                 loss = compute_loss(predictions, targets.to(device), model)
 
             # Backward
@@ -165,19 +157,18 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
             # Optimize
             if nb_integrated_batches % accumulate == 0:
-                scaler.step(optimizer)  # optimizer.step
+                scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
                 if exponential_moving_average:
                     exponential_moving_average.update(model)
-            # end batch ------------------------------------------------------------------------------------------------
 
         # Scheduler
         scheduler.step()
 
         # mAP
         if exponential_moving_average:
-            exponential_moving_average.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
+            exponential_moving_average.update_attr(model, include=['yaml', 'nb_classes', 'hyperparameters', 'giou_loss_ratio', 'classes', 'stride'])
         final_epoch = epoch + 1 == epochs
         test_precision, test_recall, test_mAP50, test_mAP = test(
             model=exponential_moving_average.ema,
