@@ -26,7 +26,7 @@ def fitness(precision, recall, map50, map, metric_weights: list):
 
 
 def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
-          logging_directory='runs/',
+          logging_directory='runs/', accumulate=accumulate,
           cfg: str = None, resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
           test_list_path='text.txt', classes=[], augment=True, cache_images=False):
     is_cuda_available = torch.cuda.is_available()
@@ -60,7 +60,6 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
 
     # Optimizer
     nominal_batch_size = 64
-    accumulate = max(round(nominal_batch_size / batch_size), 1)  # accumulate loss before optimizing
     hyperparameters['weight_decay'] *= batch_size * accumulate / nominal_batch_size  # scale weight_decay
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
@@ -241,6 +240,7 @@ if __name__ == '__main__':
     hyperparameters_path = 'data/hyp.json'
     epochs = 8
     batch_size = 8
+    accumulate = 1  # number of batches before optimizing
     img_size = 640
     resume = False  # can also be a string for the desired checkpoint
     name = ''
@@ -263,5 +263,6 @@ if __name__ == '__main__':
 
     train(hyperparameters, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
+          accumulate=accumulate,
           img_size=img_size, resume=resume, name=name, logging_directory=logging_directory, workers=workers,
           augment=augment, metric_weights=metric_weights)
