@@ -67,17 +67,11 @@ class LoadImagesAndLabels(Dataset):
                  stride=32, cache_images=False):
         try:
             image_files = []
-            for p in list_path if isinstance(list_path, list) else [list_path]:
-                p = str(Path(p))
-                parent = str(Path(p).parent) + os.sep
-                if os.path.isfile(p):
-                    with open(p, 'r') as t:
-                        t = t.read().splitlines()
-                        image_files += [x.replace('./', parent) if x.startswith('./') else x for x in t]  # local to global path
-                elif os.path.isdir(p):  # folder
-                    image_files += glob.iglob(p + os.sep + '*.*')
-                else:
-                    raise Exception('%s does not exist' % p)
+            p = str(Path(list_path))
+            if os.path.isdir(p):  # folder
+                image_files += glob.iglob(p + os.sep + '*.*')
+            else:
+                raise Exception('%s does not exist' % p)
             self.img_files = sorted([x.replace('/', os.sep) for x in image_files])
         except Exception as e:
             raise Exception('Error loading data from %s: %s\nSee %s' % (list_path, e, help_url))
