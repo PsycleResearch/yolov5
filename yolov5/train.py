@@ -169,8 +169,8 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
         # Update best mAP
         fitness_i = fitness(test_precision, test_recall, test_mAP50, test_mAP, metric_weights)
         if fitness_i > best_fitness:
+            print(f"IMPROVING ACCORDING TO METRIC: from {best_fitness} to {fitness_i}")
             best_fitness = fitness_i
-            print("IMPROVING ACCORDING TO METRIC")
 
         # Save model
         checkpoint = {'epoch': epoch,
