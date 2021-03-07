@@ -1,8 +1,6 @@
-import glob
 import math
 import os
 import random
-import shutil
 from pathlib import Path
 
 import cv2
@@ -12,7 +10,7 @@ from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from yolov5.utils.general import xyxy2xywh, xywh2xyxy
+from yolov5.utils.general import xyxy2xywh
 
 help_url = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
 img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.dng']
@@ -218,7 +216,7 @@ class LoadImagesAndLabels(Dataset):
 
         if self.augment:
             # Augment image space
-            if self.mosaic:
+            if not self.mosaic:
                 img, labels = random_perspective(img, labels,
                                                  degrees=hyp['augmentation_rotation_degrees'],
                                                  translate=hyp['augmentation_translation_fraction'],
