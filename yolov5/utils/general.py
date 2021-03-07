@@ -41,22 +41,22 @@ def check_anchors(dataset, model, thr=4.0, img_size=640):
     scale = np.random.uniform(0.9, 1.1, size=(shapes.shape[0], 1))  # augment scale
     wh = torch.tensor(np.concatenate([l[:, 3:5] * s for s, l in zip(shapes * scale, dataset.labels)])).float()  # wh
 
-    def metric(k):  # compute metric
+    def metric(k):
         r = wh[:, None] / k[None]
         x = torch.min(r, 1. / r).min(2)[0]  # ratio metric
         best = x.max(1)[0]  # best_x
-        aat = (x > 1. / thr).float().sum(1).mean()  # anchors above threshold
-        bpr = (best > 1. / thr).float().mean()  # best possible recall
-        return bpr, aat
+        anchors_above_threshold = (x > 1. / thr).float().sum(1).mean()
+        best_possible_recall = (best > 1. / thr).float().mean()
+        return best_possible_recall, anchors_above_threshold
 
-    bpr, aat = metric(m.anchor_grid.clone().cpu().view(-1, 2))
-    print('anchors/target = %.2f, Best Possible Recall (BPR) = %.4f' % (aat, bpr), end='')
-    if bpr < 0.98:  # threshold to recompute
-        print('. Attempting to generate improved anchors, please wait...' % bpr)
-        na = m.anchor_grid.numel() // 2  # number of anchors
-        new_anchors = kmean_anchors(dataset, n=na, img_size=img_size, thr=thr, gen=1000, verbose=False)
-        new_bpr = metric(new_anchors.reshape(-1, 2))[0]
-        if new_bpr > bpr:  # replace anchors
+    best_possible_recall, anchors_above_threshold = metric(m.anchor_grid.clone().cpu().view(-1, 2))
+    print('anchors/target = %.2f, Best Possible Recall (BPR) = %.4f' % (anchors_above_threshold, best_possible_recall), end='')
+    if best_possible_recall < 0.98:  # threshold to recompute
+        print('. Attempting to generate improved anchors, please wait...')
+        nb_anchors = m.anchor_grid.numel() // 2  # number of anchors
+        new_anchors = kmean_anchors(dataset, nb_anchors=nb_anchors, img_size=img_size, thr=thr, gen=1000, verbose=False)
+        new_best_possible_recall = metric(new_anchors.reshape(-1, 2))[0]
+        if new_best_possible_recall > best_possible_recall:  # replace anchors
             new_anchors = torch.tensor(new_anchors, device=m.anchors.device).type_as(m.anchors)
             m.anchor_grid[:] = new_anchors.clone().view_as(m.anchor_grid)  # for inference
             m.anchors[:] = new_anchors.clone().view_as(m.anchors) / m.stride.to(m.anchors.device).view(-1, 1, 1)  # loss
@@ -541,12 +541,12 @@ def strip_optimizer(file_path='weights/best.pt'):
     print('Optimizer stripped from %s: %.1fMB' % (file_path, mb))
 
 
-def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=1000, verbose=True):
+def kmean_anchors(path='./data/coco128.yaml', nb_anchors=9, img_size=640, thr=4.0, gen=1000, verbose=True):
     """ Creates kmeans-evolved anchors from training dataset
 
         Arguments:
             path: path to dataset *.yaml, or a loaded dataset
-            n: number of anchors
+            nb_anchors: number of anchors
             img_size: image size used for training
             thr: anchor-label wh ratio threshold hyperparameter hyp['anchor_t'] used for training, default=4.0
             gen: generations to evolve anchors using genetic algorithm
@@ -572,10 +572,10 @@ def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=10
     def print_results(k):
         k = k[np.argsort(k.prod(1))]  # sort small to large
         x, best = metric(k, wh0)
-        bpr, aat = (best > thr).float().mean(), (x > thr).float().mean() * n  # best possible recall, anch > thr
+        bpr, aat = (best > thr).float().mean(), (x > thr).float().mean() * nb_anchors  # best possible recall, anch > thr
         print('thr=%.2f: %.4f best possible recall, %.2f anchors past thr' % (thr, bpr, aat))
         print('n=%g, img_size=%s, metric_all=%.3f/%.3f-mean/best, past_thr=%.3f-mean: ' %
-              (n, img_size, x.mean(), best.mean(), x[x > thr].mean()), end='')
+              (nb_anchors, img_size, x.mean(), best.mean(), x[x > thr].mean()), end='')
         for i, x in enumerate(k):
             print('%i,%i' % (round(x[0]), round(x[1])), end=',  ' if i < len(k) - 1 else '\n')  # use in *.cfg
         return k
@@ -600,9 +600,9 @@ def kmean_anchors(path='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=10
     wh = wh0[(wh0 >= 2.0).any(1)]  # filter > 2 pixels
 
     # Kmeans calculation
-    print('Running kmeans for %g anchors on %g points...' % (n, len(wh)))
+    print('Running kmeans for %g anchors on %g points...' % (nb_anchors, len(wh)))
     s = wh.std(0)  # sigmas for whitening
-    k, dist = kmeans(wh / s, n, iter=30)  # points, mean distance
+    k, dist = kmeans(wh / s, nb_anchors, iter=30)  # points, mean distance
     k *= s
     wh = torch.tensor(wh, dtype=torch.float32)  # filtered
     wh0 = torch.tensor(wh0, dtype=torch.float32)  # unflitered

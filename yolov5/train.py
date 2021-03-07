@@ -46,7 +46,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     model = Model(checkpoint['model'].yaml, channels=3, nb_classes=nb_classes).to(device)
     state_dict = checkpoint['model'].float().state_dict()  # to FP32
     state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
-    model.load_state_dict(state_dict, strict=False)  # load
+    model.load_state_dict(state_dict, strict=False)
 
     # Freeze
     freeze = ['', ]  # parameter names to freeze (full or partial)
@@ -75,24 +75,22 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     lf = lambda x: (((1 + math.cos(x * math.pi / epochs)) / 2) ** 1.0) * 0.8 + 0.2  # cosine
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)
 
-    # Resume
     start_epoch, best_fitness = 0, 0.0
-    if weights is not None:
-        # Optimizer
-        if checkpoint['optimizer'] is not None:
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            best_fitness = checkpoint['best_fitness']
+    # Optimizer
+    if checkpoint['optimizer'] is not None:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        best_fitness = checkpoint['best_fitness']
 
-        # Epochs
-        start_epoch = checkpoint['epoch'] + 1
-        if resume:
-            assert start_epoch > 0, '%s training to %g epochs is finished, nothing to resume.' % (weights, epochs)
-        if epochs < start_epoch:
-            logger.info('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
-                        (weights, checkpoint['epoch'], epochs))
-            epochs += checkpoint['epoch']  # finetune additional epochs
+    # Epochs
+    start_epoch = checkpoint['epoch'] + 1
+    if resume:
+        assert start_epoch > 0, '%s training to %g epochs is finished, nothing to resume.' % (weights, epochs)
+    if epochs < start_epoch:
+        logger.info('%s has been trained for %g epochs. Fine-tuning for %g additional epochs.' %
+                    (weights, checkpoint['epoch'], epochs))
+        epochs += checkpoint['epoch']
 
-        del checkpoint, state_dict
+    del checkpoint, state_dict
 
     # Image sizes
     grid_size = int(max(model.stride))  # max stride
@@ -214,7 +212,6 @@ if __name__ == '__main__':
     metric_weights = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
 
     if resume:
-        assert cfg is not None
         checkpoint = resume if isinstance(resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(checkpoint), 'ERROR: --resume checkpoint does not exist'
         weights = checkpoint
