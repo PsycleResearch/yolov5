@@ -1,4 +1,4 @@
-import math
+import logging
 import logging
 import math
 from copy import deepcopy
@@ -11,7 +11,7 @@ from yolov5.models.common import Conv, Bottleneck, SPP, DWConv, Focus, Bottlenec
 from yolov5.models.experimental import MixConv2d, CrossConv, C3
 from yolov5.utils.general import check_anchor_order, make_divisible
 from yolov5.utils.torch_utils import (
-    time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights)
+    fuse_conv_and_bn, model_info, initialize_weights)
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +123,12 @@ class Model(nn.Module):
 
 
 def parse_model(model_dict, input_channels):
+    ##########
+    # Replace "nc" in dict by "nb_classes"
+    assert model_dict['head'][-1][3][0] == 'nc'
+    model_dict['head'][-1][3][0] = 'nb_classes'
+    ###########
+    
     anchors, nb_classes, depth_multiple, width_multiple = model_dict['anchors'], model_dict['nb_classes'], model_dict['depth_multiple'], model_dict['width_multiple']
     nb_anchors = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors
     nb_outputs = nb_anchors * (nb_classes + 5)
