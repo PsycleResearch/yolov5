@@ -28,10 +28,10 @@ def fitness(precision, recall, map50, map, metric_weights: list):
     return np.array([precision, recall, map50, map] * np.array(metric_weights)).sum()
 
 
-def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_size=1,
-          logging_directory='runs/', accumulate=1,
-          cfg: str = None, resume=False, img_size=640, workers=8, name='', train_list_path='train.txt',
-          test_list_path='text.txt', classes=[], augment=True, cache_images=False):
+def train(hyperparameters: dict, weights: str, metric_weights: list = None, epochs: int = 2, batch_size: int = 1,
+          logging_directory: str = 'runs/', accumulate: int = 1,
+          cfg: str = None, resume: bool = False, img_size: int = 640, workers: int = 8, train_list_path: str = 'train.txt',
+          test_list_path: str = 'text.txt', classes: list = [], augment: bool = True, cache_images: bool = False):
     is_cuda_available = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda_available else 'cpu')
     weights_directory = f'{logging_directory}/weights'
@@ -195,8 +195,7 @@ def train(hyperparameters: dict, weights, metric_weights=None, epochs=2, batch_s
     # end training
 
     # Strip optimizers
-    n = ('_' if len(name) and not name.isnumeric() else '') + name
-    flast, fbest = f'{weights_directory}/last{n}.pt', f'{weights_directory}/best{n}.pt'
+    flast, fbest = f'{weights_directory}/last.pt', f'{weights_directory}/best.pt'
     for f1, f2 in zip([last_weights_directory, best_weights_directory], [flast, fbest]):
         if os.path.exists(f1):
             os.rename(f1, f2)  # rename
@@ -214,11 +213,10 @@ if __name__ == '__main__':
     classes = ['not_ok', 'ok']
     hyperparameters_path = 'data/hyp.json'
     epochs = 8
-    batch_size = 8
+    batch_size = 2
     accumulate = 1  # number of batches before optimizing
     img_size = 640
     resume = False  # can also be a string for the desired checkpoint
-    name = ''
     logging_directory = 'runs/'
     workers = 8
     augment = True
@@ -239,5 +237,5 @@ if __name__ == '__main__':
     train(hyperparameters, weights, cfg=cfg, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           accumulate=accumulate,
-          img_size=img_size, resume=resume, name=name, logging_directory=logging_directory, workers=workers,
+          img_size=img_size, resume=resume, logging_directory=logging_directory, workers=workers,
           augment=augment, metric_weights=metric_weights)
