@@ -124,6 +124,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     check_anchors(train_dataset, model=model, thr=hyperparameters['anchor_multiple_threshold'], img_size=img_size)
 
     # Start training
+    nb_warmup_iterations = max(3 * nb_batches, 1e3)
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=is_cuda_available)
     logger.info('Starting training for %g epochs...' % epochs)
@@ -136,6 +137,16 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
         for i, (images, targets, paths, _) in tqdm(enumerate(train_dataloader), total=nb_batches):
             nb_integrated_batches = i + nb_batches * epoch
             images = images.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
+
+            # Warmup
+            if nb_integrated_batches <= nb_warmup_iterations:
+                xi = [0, nb_warmup_iterations]  # x interp
+                accumulate = max(1, np.interp(nb_integrated_batches, xi, [1, nb_batches / batch_size]).round())
+                for j, x in enumerate(optimizer.param_groups):
+                    # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                    x['lr'] = np.interp(nb_integrated_batches, xi, [0.1 if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                    if 'momentum' in x:
+                        x['momentum'] = np.interp(nb_integrated_batches, xi, [0.9, hyperparameters['momentum']])
 
             # Autocast
             with amp.autocast(enabled=is_cuda_available):
