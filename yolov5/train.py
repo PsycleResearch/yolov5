@@ -66,7 +66,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
         else:
             pg0.append(v)  # all else
 
-    optimizer = optim.Adam(pg0, lr=hyperparameters['lr0'], betas=(hyperparameters['beta1'], 0.999))
+    optimizer = optim.Adam(pg0, lr=hyperparameters['lr0'], betas=(hyperparameters['momentum'], 0.999))
     optimizer.add_param_group(
         {'params': pg1, 'weight_decay': hyperparameters['weight_decay']})  # add pg1 with weight_decay
     optimizer.add_param_group({'params': pg2})  # add pg2 (biases)
