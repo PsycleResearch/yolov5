@@ -6,8 +6,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from yolov5.models.common import Conv, Bottleneck, SPP, DWConv, Focus, BottleneckCSP, Concat
-from yolov5.models.experimental import MixConv2d, CrossConv, C3
+from yolov5.models.common import Conv, Bottleneck, SPP, Focus, BottleneckCSP, Concat
 from yolov5.utils.general import check_anchor_order, make_divisible
 from yolov5.utils.torch_utils import (
     fuse_conv_and_bn, model_info, initialize_weights)
@@ -136,13 +135,12 @@ def parse_model(model_dict, input_channels):
                 pass
 
         _number = max(round(_number * depth_multiple), 1) if _number > 1 else _number  # depth gain
-        print(_module in [nn.Conv2d, Bottleneck, DWConv, MixConv2d, CrossConv, C3])
-        if _module in [nn.Conv2d, Conv, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
+        if _module in [nn.Conv2d, Conv, Bottleneck, SPP, Focus, BottleneckCSP]:
             channels, output_channels = input_channels[_from], _args[0]
             output_channels = make_divisible(output_channels * width_multiple, 8) if output_channels != nb_outputs else output_channels
 
             _args = [channels, output_channels, *_args[1:]]
-            if _module in [BottleneckCSP, C3]:
+            if _module is BottleneckCSP:
                 _args.insert(2, _number)
                 _number = 1
         elif _module is nn.BatchNorm2d:
