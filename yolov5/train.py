@@ -119,11 +119,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     model.class_weights = labels_to_class_weights(train_dataset.labels, nb_classes).to(device)
     model.classes = classes
 
-    # Exponential moving average
-    exponential_moving_average = ModelEMA(model)
-
     # Testloader
-    exponential_moving_average.updates = start_epoch * nb_batches // accumulate
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
                                            hyperparameters=hyperparameters,
                                            augment=False,
@@ -160,18 +156,14 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
-                if exponential_moving_average:
-                    exponential_moving_average.update(model)
 
         # Scheduler
         scheduler.step()
 
         # mAP
-        if exponential_moving_average:
-            exponential_moving_average.update_attr(model, include=['yaml', 'nb_classes', 'hyperparameters', 'giou_loss_ratio', 'classes', 'stride'])
         final_epoch = epoch + 1 == epochs
         test_precision, test_recall, test_mAP50, test_mAP = test(
-            model=exponential_moving_average.ema,
+            model=model,
             dataloader=test_dataloader,
             save_dir=logging_directory)
 
@@ -179,11 +171,12 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
         fitness_i = fitness(test_precision, test_recall, test_mAP50, test_mAP, metric_weights)
         if fitness_i > best_fitness:
             best_fitness = fitness_i
+            print("IMPROVING ACCORDING TO METRIC")
 
         # Save model
         checkpoint = {'epoch': epoch,
                       'best_fitness': best_fitness,
-                      'model': exponential_moving_average.ema,
+                      'model': model,
                       'optimizer': None if final_epoch else optimizer.state_dict()}
 
         # Save last, best and delete
