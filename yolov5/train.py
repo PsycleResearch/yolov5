@@ -198,7 +198,7 @@ if __name__ == '__main__':
     weights = 'weights/yolov5s.pt'  # pre-trained weights
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
-    classes = ['not_ok', 'ok']
+    classes = ['copper']
     hyperparameters_path = 'data/hyp.json'
     epochs = 8
     batch_size = 2

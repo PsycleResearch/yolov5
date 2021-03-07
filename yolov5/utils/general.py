@@ -355,15 +355,14 @@ class BCEBlurWithLogitsLoss(nn.Module):
 
 def compute_loss(predictions, targets, model):
     device = targets.device
-    lcls, lbox, obj_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
-    tcls, tbox, indices, anchors = build_targets(predictions, targets, model)  # targets
+    loss_class, loss_box, obj_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+    target_class, target_box, indices, anchors = build_targets(predictions, targets, model)  # targets
     hyperparameters = model.hyperparameters
 
     # Define criteria
     BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([hyperparameters['cls_bceloss_positive_weight']])).to(device)
     BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([hyperparameters['obj_bceloss_positive_weight']])).to(device)
 
-    # Class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
     cp, cn = smooth_BCE(eps=0.0)
 
     # Focal loss
@@ -388,8 +387,8 @@ def compute_loss(predictions, targets, model):
             pxy = prediction_subset[:, :2].sigmoid() * 2. - 0.5
             pwh = (prediction_subset[:, 2:4].sigmoid() * 2) ** 2 * anchors[layer_index]
             pbox = torch.cat((pxy, pwh), 1).to(device)  # predicted box
-            giou = bbox_iou(pbox.T, tbox[layer_index], x1y1x2y2=False, CIoU=True)  # giou(prediction, target)
-            lbox += (1.0 - giou).mean()  # giou loss
+            giou = bbox_iou(pbox.T, target_box[layer_index], x1y1x2y2=False, CIoU=True)  # giou(prediction, target)
+            loss_box += (1.0 - giou).mean()  # giou loss
 
             # Objectness
             tobj[image, anchor, gridy, gridx] = (1.0 - model.giou_loss_ratio) + model.giou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
@@ -397,18 +396,18 @@ def compute_loss(predictions, targets, model):
             # Classification
             if model.nb_classes > 1:  # cls loss (only if multiple classes)
                 t = torch.full_like(prediction_subset[:, 5:], cn, device=device)  # targets
-                t[range(nb_targets), tcls[layer_index]] = cp
-                lcls += BCEcls(prediction_subset[:, 5:], t)  # BCE
+                t[range(nb_targets), target_class[layer_index]] = cp
+                loss_class += BCEcls(prediction_subset[:, 5:], t)  # BCE
 
         obj_loss += BCEobj(layer_predictions[..., 4], tobj) * balance[layer_index]
 
     output_count_scaling = 3 / nb_outputs
-    lbox *= hyperparameters['giou_loss_gain'] * output_count_scaling
+    loss_box *= hyperparameters['giou_loss_gain'] * output_count_scaling
     obj_loss *= hyperparameters['obj_loss_gain'] * output_count_scaling * (1.4 if nb_outputs == 4 else 1.)
-    lcls *= hyperparameters['cls_loss_gain'] * output_count_scaling
+    loss_class *= hyperparameters['cls_loss_gain'] * output_count_scaling
     bs = tobj.shape[0]  # batch size
 
-    loss = lbox + obj_loss + lcls
+    loss = loss_box + obj_loss + loss_class
     return loss * bs
 
 
@@ -421,7 +420,7 @@ def build_targets(p, targets, model):
     ai = torch.arange(nb_anchors, device=targets.device).float().view(nb_anchors, 1).repeat(1, nb_targets)  # same as .repeat_interleave(nt)
     targets = torch.cat((targets.repeat(nb_anchors, 1, 1), ai[:, :, None]), 2)  # append anchor indices
 
-    bias = 0.5  # bias
+    bias = 0.5
     off = torch.tensor([[0, 0],
                         [1, 0], [0, 1], [-1, 0], [0, -1],  # j,k,l,m
                         ], device=targets.device).float() * bias  # offsets
@@ -451,11 +450,11 @@ def build_targets(p, targets, model):
             offsets = 0
 
         # Define
-        image, cls = t[:, :2].long().T  # image, class
-        grid_x_y = t[:, 2:4]  # grid xy
-        grid_width_height = t[:, 4:6]  # grid wh
+        image, cls = t[:, :2].long().T
+        grid_x_y = t[:, 2:4]
+        grid_width_height = t[:, 4:6]
         grid_i_j = (grid_x_y - offsets).long()
-        grid_x_y_i, grid_x_y_j = grid_i_j.T  # grid xy indices
+        grid_x_y_i, grid_x_y_j = grid_i_j.T
 
         # Append
         anchor_indices = t[:, 6].long()  # anchor indices
