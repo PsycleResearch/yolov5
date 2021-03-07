@@ -79,11 +79,11 @@ class LoadImagesAndLabels(Dataset):
         except Exception as e:
             raise Exception('Error loading data from %s: %s\nSee %s' % (list_path, e, help_url))
 
-        n = len(self.img_files)
-        assert n > 0, 'No images found in %s. See %s' % (list_path, help_url)
-        batch_index = np.floor(np.arange(n) / batch_size).astype(np.int)
+        nb_images = len(self.img_files)
+        assert nb_images > 0, 'No images found in %s. See %s' % (list_path, help_url)
+        batch_index = np.floor(np.arange(nb_images) / batch_size).astype(np.int)
 
-        self.n = n  # number of images
+        self.nb_images = nb_images  # number of images
         self.batch = batch_index  # batch index of image
         self.img_size = img_size
         self.augment = augment
@@ -117,7 +117,7 @@ class LoadImagesAndLabels(Dataset):
         self.labels = list(labels)
 
         # Cache labels
-        nb_missing, nb_found, nb_empty, datasubset, nb_duplicate = 0, 0, 0, 0, 0  # number missing, found, empty, datasubset, duplicate
+        nb_missing, nb_found, nb_empty, datasubset, nb_duplicate = 0, 0, 0, 0, 0
         pbar = enumerate(self.label_files)
         pbar = tqdm(pbar)
         for i, file in pbar:
@@ -135,21 +135,21 @@ class LoadImagesAndLabels(Dataset):
                 nb_empty += 1  # print('empty labels for image %s' % self.img_files[i])  # file empty
 
             pbar.desc = 'Scanning labels %s (%g found, %g missing, %g empty, %g duplicate, for %g images)' % (
-                cache_path, nb_found, nb_missing, nb_empty, nb_duplicate, n)
+                cache_path, nb_found, nb_missing, nb_empty, nb_duplicate, nb_images)
         if nb_found == 0:
             s = 'WARNING: No labels found in %s. See %s' % (os.path.dirname(file) + os.sep, help_url)
             print(s)
             assert not augment, '%s. Can not train without labels.' % s
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
-        self.imgs = [None] * n
+        self.images = [None] * nb_images
         if cache_images:
             gb = 0  # Gigabytes of cached images
             pbar = tqdm(range(len(self.img_files)), desc='Caching images')
-            self.img_hw0, self.img_hw = [None] * n, [None] * n
+            self.img_hw0, self.img_hw = [None] * nb_images, [None] * nb_images
             for i in pbar:  # max 10k images
-                self.imgs[i], self.img_hw0[i], self.img_hw[i] = load_image(self, i)  # img, hw_original, hw_resized
-                gb += self.imgs[i].nbytes
+                self.images[i], self.img_hw0[i], self.img_hw[i] = load_image(self, i)  # img, hw_original, hw_resized
+                gb += self.images[i].nbytes
                 pbar.desc = 'Caching images (%.1fGB)' % (gb / 1E9)
 
     def cache_labels(self, path='labels.cache'):
@@ -283,7 +283,7 @@ class LoadImagesAndLabels(Dataset):
 # Ancillary functions --------------------------------------------------------------------------------------------------
 def load_image(self, index):
     # loads 1 image from dataset, returns img, original hw, resized hw
-    img = self.imgs[index]
+    img = self.images[index]
     if img is None:  # not cached
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
@@ -295,7 +295,7 @@ def load_image(self, index):
             img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
         return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
     else:
-        return self.imgs[index], self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
+        return self.images[index], self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
 
 
 def augment_hsv(img, hue_gain=0.5, saturation_gain=0.5, value_gain=0.5):
