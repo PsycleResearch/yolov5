@@ -61,18 +61,17 @@ class Detect(nn.Module):
 class Model(nn.Module):
     def __init__(self, cfg='yolov5s.yaml', channels=3, nb_classes=None):  # model, input channels, number of classes
         super(Model, self).__init__()
-        if isinstance(cfg, dict):
+        if isinstance(cfg, dict):  # When loading pretrained weights
             self.yaml = cfg  # model dict
-        else:  # is *.yaml
+        else:  # from scratch
             import yaml  # for torch hub
             self.yaml_file = Path(cfg).name
             with open(cfg) as f:
                 self.yaml = yaml.load(f, Loader=yaml.FullLoader)  # model dict
 
         # Define model
-        if nb_classes and nb_classes != self.yaml['nc']:  # 'nb_classes' is 'nc' in the pretrained weights
-            self.yaml['nb_classes'] = nb_classes  # override yaml value
-        self.model, self.save = parse_model(deepcopy(self.yaml), ch=[channels])  # model, savelist, ch_out
+        self.yaml['nb_classes'] = nb_classes  # override pretrained weights nb classes
+        self.model, self.save = parse_model(deepcopy(self.yaml), input_channels=[channels])
 
         # Build strides, anchors
         m = self.model[-1]  # Detect()
@@ -123,45 +122,45 @@ class Model(nn.Module):
         model_info(self)
 
 
-def parse_model(d, ch):  # model_dict, input_channels(3)
-    anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
-    na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
-    no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
+def parse_model(model_dict, input_channels):
+    anchors, nb_classes, depth_multiple, width_multiple = model_dict['anchors'], model_dict['nb_classes'], model_dict['depth_multiple'], model_dict['width_multiple']
+    nb_anchors = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors
+    nb_outputs = nb_anchors * (nb_classes + 5)
 
-    layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
-    for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
-        m = eval(m) if isinstance(m, str) else m  # eval strings
-        for j, a in enumerate(args):
+    layers, save, output_channels = [], [], input_channels[-1]
+    for i, (_from, _number, _module, _args) in enumerate(model_dict['backbone'] + model_dict['head']):
+        _module = eval(_module) if isinstance(_module, str) else _module  # eval strings
+        for j, a in enumerate(_args):
             try:
-                args[j] = eval(a) if isinstance(a, str) else a  # eval strings
+                _args[j] = eval(a) if isinstance(a, str) else a  # eval strings
             except:
                 pass
 
-        n = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [nn.Conv2d, Conv, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
-            c1, c2 = ch[f], args[0]
-            c2 = make_divisible(c2 * gw, 8) if c2 != no else c2
+        _number = max(round(_number * depth_multiple), 1) if _number > 1 else _number  # depth gain
+        if _module in [nn.Conv2d, Conv, Bottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv, BottleneckCSP, C3]:
+            channels, output_channels = input_channels[_from], _args[0]
+            output_channels = make_divisible(output_channels * width_multiple, 8) if output_channels != nb_outputs else output_channels
 
-            args = [c1, c2, *args[1:]]
-            if m in [BottleneckCSP, C3]:
-                args.insert(2, n)
-                n = 1
-        elif m is nn.BatchNorm2d:
-            args = [ch[f]]
-        elif m is Concat:
-            c2 = sum([ch[-1 if x == -1 else x + 1] for x in f])
-        elif m is Detect:
-            args.append([ch[x + 1] for x in f])
-            if isinstance(args[1], int):  # number of anchors
-                args[1] = [list(range(args[1] * 2))] * len(f)
+            _args = [channels, output_channels, *_args[1:]]
+            if _module in [BottleneckCSP, C3]:
+                _args.insert(2, _number)
+                _number = 1
+        elif _module is nn.BatchNorm2d:
+            _args = [input_channels[_from]]
+        elif _module is Concat:
+            output_channels = sum([input_channels[-1 if x == -1 else x + 1] for x in _from])
+        elif _module is Detect:
+            _args.append([input_channels[x + 1] for x in _from])
+            if isinstance(_args[1], int):  # number of anchors
+                _args[1] = [list(range(_args[1] * 2))] * len(_from)
         else:
-            c2 = ch[f]
+            output_channels = input_channels[_from]
 
-        m_ = nn.Sequential(*[m(*args) for _ in range(n)]) if n > 1 else m(*args)  # module
-        t = str(m)[8:-2].replace('__main__.', '')  # module type
-        np = sum([x.numel() for x in m_.parameters()])  # number params
-        m_.i, m_.f, m_.type, m_.np = i, f, t, np  # attach index, 'from' index, type, number params
-        save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
+        m_ = nn.Sequential(*[_module(*_args) for _ in range(_number)]) if _number > 1 else _module(*_args)  # module
+        t = str(_module)[8:-2].replace('__main__.', '')  # module type
+        nb_params = sum([x.numel() for x in m_.parameters()])
+        m_.i, m_.f, m_.type, m_.np = i, _from, t, nb_params  # attach index, 'from' index, type, number params
+        save.extend(x % i for x in ([_from] if isinstance(_from, int) else _from) if x != -1)  # append to savelist
         layers.append(m_)
-        ch.append(c2)
+        input_channels.append(output_channels)
     return nn.Sequential(*layers), sorted(save)
