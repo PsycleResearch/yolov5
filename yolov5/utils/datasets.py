@@ -115,7 +115,7 @@ class LoadImagesAndLabels(Dataset):
         self.labels = list(labels)
 
         # Cache labels
-        nb_missing, nb_found, nb_empty, datasubset, nb_duplicate = 0, 0, 0, 0, 0
+        nb_missing, nb_found, nb_empty, nb_duplicate = 0, 0, 0, 0
         pbar = enumerate(self.label_files)
         pbar = tqdm(pbar)
         for i, file in pbar:

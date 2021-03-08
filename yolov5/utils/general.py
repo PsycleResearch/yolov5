@@ -477,7 +477,7 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, classes=None,
     nb_classes = prediction[0].shape[1] - 5  # number of classes
     candidates = prediction[..., 4] > conf_thres  # candidates
 
-    min_box_width, max_box_height = 2, 4096  # pixels
+    max_box_height = 4096  # pixels
     max_nb_detections_per_image = 300
     multi_label = nb_classes > 1
 
@@ -599,7 +599,7 @@ def kmean_anchors(path='./data/coco128.yaml', nb_anchors=9, img_size=640, thr=4.
     # Kmeans calculation
     print('Running kmeans for %g anchors on %g points...' % (nb_anchors, len(wh)))
     s = wh.std(0)  # sigmas for whitening
-    k, dist = kmeans(wh / s, nb_anchors, iter=30)  # points, mean distance
+    k, _ = kmeans(wh / s, nb_anchors, iter=30)  # points, mean distance
     k *= s
     wh = torch.tensor(wh, dtype=torch.float32)  # filtered
     wh0 = torch.tensor(wh0, dtype=torch.float32)  # unflitered
@@ -693,8 +693,6 @@ def plot_images(images, targets, paths=None, fname='images.jpg', names=None, max
         if len(targets) > 0:
             image_targets = targets[targets[:, 0] == i]
             boxes = xywh2xyxy(image_targets[:, 2:6]).T
-            classes = image_targets[:, 1].astype('int')
-            gt = image_targets.shape[1] == 6  # ground truth if no conf column
 
             boxes[[0, 2]] *= w
             boxes[[0, 2]] += block_x

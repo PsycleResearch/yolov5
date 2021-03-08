@@ -31,7 +31,7 @@ def test(model,
     seen = 0
     stats = []  # correct, conf, pcls, tcls
     print("VALIDATING")
-    for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader)):
+    for batch_i, (img, targets, paths, _) in enumerate(tqdm(dataloader)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0
@@ -40,7 +40,7 @@ def test(model,
         whwh = torch.Tensor([width, height, width, height]).to(device)
 
         with torch.no_grad():
-            inf_out, train_out = model(img)
+            inf_out, _ = model(img)
             output = non_max_suppression(inf_out, conf_thres=conf_thres, iou_thres=iou_thres)
 
         # Statistics per image
