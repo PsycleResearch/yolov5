@@ -17,7 +17,7 @@ class YoloDataset(Dataset):
                  S=[13, 26, 52],
                  C=20):
 
-        with open('datas.json', 'r') as f:
+        with open(labels, 'r') as f:
             self.datas = json.load(f)
 
         self.image_id = list(self.datas.keys())
@@ -34,15 +34,13 @@ class YoloDataset(Dataset):
         return len(self.annotations)
 
     def __getitem__(self, idx):
-        img_path = os.listdir() + "/" + self.image_id[idx]
+        img_path = img_dir + self.image_id[idx] + '.jpeg'
         bboxes = self.annotations[idx] # [x, y, w, h, class]
         image = Image.open(img_path).convert("RGB")
 
         targets = [torch.zeros(self.nb_anchors // 3, 3, S, S, 6) for S in self.S] #[prob, x, y, w, h, c]
 
-        # Choose which anchors is responsible for each cells
-        # How ?
-        # Choose anchors with highest IOU
+        # Choose which anchors is responsible for each cells following highest IOU
         for bboxe in bboxes:
             iou_anchors = iou(torch.tensor(bboxe[2:4]), self.anchors)
             anchor_indices = iou_anchors.argsort(descending=True, dim=0)
@@ -54,10 +52,10 @@ class YoloDataset(Dataset):
                 anchor_on_scale = anchor_idx % self.nb_anchors_per_scale
                 S = self.S[scale_idx]
 
-                # In Yolo, each coordinates are relative to each cells so:
+                # In Yolo, each coordinates are relative to each cells:
                 i, j = int(S*y), int(S*x)
 
-                # It's possible but that two objects with same bbox are taken
+                # It's possible but rare that two objects with same bbox are taken
                 anchor_taken = targets[scale_idx][anchor_on_scale, i, j, 0]
 
                 if not anchor_taken and has_anchor[scale_idx]:
@@ -71,5 +69,19 @@ class YoloDataset(Dataset):
                     targets[scale_idx][anchor_on_scale, i, j, 5] = int(class_label)
 
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_tresh:
+                    None
 
         return image, targets
+
+if __name__ == '__main__':
+
+    img_dir = './images/'
+    labels = './datas/val_metadatas.json'
+    image_size = (0, 0)
+    anchors = [[(10, 13), (16, 30), (33, 23)],
+                        [(30, 61), (62, 45), (59, 119)],
+                        [(116, 90), (156, 198), (373, 326)]]
+    ds = YoloDataset(img_dir, labels, anchors, image_size)
+
+    for i in range(len(ds)):
+        print(ds[i])
