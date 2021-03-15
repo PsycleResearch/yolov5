@@ -111,6 +111,7 @@ class Model(nn.Module):
 def parse_model(model_dict, input_channels):
     ##########
     # Replace "nc" in dict by "nb_classes"
+    assert model_dict['nc'][-1][3][0] == 'nc'
     assert model_dict['head'][-1][3][0] == 'nc'
     model_dict['head'][-1][3][0] = 'nb_classes'
     ###########
