@@ -59,6 +59,21 @@ def create_dataloader(list_path, img_size, batch_size, stride, hyperparameters: 
     return dataloader, dataset
 
 
+def plot_one_box(x, img, color=None, label=None, line_thickness=None):
+    # Plots one bounding box on image img
+    tl = line_thickness or round(0.002 * (img.shape[0] + img.shape[1]) / 2) + 1  # line/font thickness
+    color = color or [random.randint(0, 255) for _ in range(3)]
+    c1, c2 = (int(x[0]), int(x[1])), (int(x[2]), int(x[3]))
+    cv2.rectangle(img, c1, c2, color, thickness=tl, lineType=cv2.LINE_AA)
+    if label:
+        tf = max(tl - 1, 1)  # font thickness
+        t_size = cv2.getTextSize(label, 0, fontScale=tl / 3, thickness=tf)[0]
+        c2 = c1[0] + t_size[0], c1[1] - t_size[1] - 3
+        cv2.rectangle(img, c1, c2, color, -1, cv2.LINE_AA)  # filled
+        cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
+
+
+
 class LoadImagesAndLabels(Dataset):
     def __init__(self, list_path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None,
                  image_weights=False,
@@ -189,6 +204,10 @@ class LoadImagesAndLabels(Dataset):
             # Load image
             img, (height, width) = load_image(self, index)
 
+            ##############
+            cv2.imwrite('/tmp/base.png', img)
+            ##############
+
             # Letterbox
             shape = self.img_size  # final letterboxed shape
             img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
@@ -205,6 +224,13 @@ class LoadImagesAndLabels(Dataset):
                 labels[:, 3] = ratio[0] * width * (x[:, 1] + x[:, 3] / 2) + pad[0]
                 labels[:, 4] = ratio[1] * height * (x[:, 2] + x[:, 4] / 2) + pad[1]
 
+            ##############
+            cv2.imwrite('/tmp/letterbox.png', img)
+            img2 = img.copy()
+            plot_one_box(labels[0][1:], img2, label='test', line_thickness=3)
+            cv2.imwrite('/tmp/letterbox_boxes.png', img2)
+            ##############
+
         if self.augment:
             # Augment image space
             if not self.mosaic:
@@ -219,12 +245,30 @@ class LoadImagesAndLabels(Dataset):
             augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
                         value_gain=hyp['augmentation_hsv_value'])
 
+            ##############
+            cv2.imwrite('/tmp/hsv.png', img)
+            ##############
+
             if random.random() < hyp['augmentation_gaussian_noise_probability']:
                 gaussian = np.random.normal(0, hyp['augmentation_gaussian_noise_std'], img.shape).astype('uint8')
                 img = cv2.add(img, gaussian)
 
-            if random.random() < hyp['augmentation_backgrounds']:
-                pass
+            ##############
+            cv2.imwrite('/tmp/noise.png', img)
+            img2 = img.copy()
+            plot_one_box(labels[0][1:], img2, label='test', line_thickness=3)
+            cv2.imwrite('/tmp/noise_boxes.png', img2)
+            ##############
+
+            if random.random() < hyp['augmentation_backgrounds_probability']:
+                img, labels = augment_background(img, labels)
+
+            ##############
+            cv2.imwrite('/tmp/background.png', img)
+            img2 = img.copy()
+            plot_one_box(labels[0][1:], img2, label='test', line_thickness=3)
+            cv2.imwrite('/tmp/background_boxes.png', img2)
+            ##############
 
         nb_labels = len(labels)
         if nb_labels:
@@ -390,6 +434,36 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
     return img, ratio, (dw, dh)
+
+
+def augment_background(img, labels):
+    # TODO: get randomly one background
+    background = cv2.imread('tmp/backgrounds/test.png', cv2.IMREAD_UNCHANGED).astype('uint8')
+    labels = labels.astype(np.int)
+    img_new = np.copy(background)
+    labels_new = np.zeros(labels.shape)
+
+    if img_new.shape != img.shape:
+        height, width, _ = img.shape
+        img_new = cv2.resize(img_new, (width, height))
+
+    for i, label in enumerate(labels):
+        # TODO: make sure objects added one by one can't superpose
+        crop = img[label[2]:label[4], label[1]:label[3], :]
+
+        crop_height, crop_width, _ = crop.shape
+        img_height, img_width, _ = img_new.shape
+        max_x = img_width - crop_width
+        max_y = img_height - crop_height
+        x1 = np.random.randint(0, max_x)
+        y1 = np.random.randint(0, max_y)
+        x2 = x1 + crop_width
+        y2 = y1 + crop_height
+        img_new[y1:y2, x1:x2] = crop
+        labels_new[i] = [label[0], x1, y1, x2, y2]
+
+    return img_new, np.array(labels_new).astype(np.float)
+
 
 
 def random_perspective(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0, border=(0, 0)):
