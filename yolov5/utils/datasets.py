@@ -227,7 +227,9 @@ class LoadImagesAndLabels(Dataset):
             augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
                         value_gain=hyp['augmentation_hsv_value'])
 
-
+            if np.random.random() > hyp['augmentation_gaussian_noise_probability']:
+                gaussian = np.random.normal(0, hyp['augmentation_gaussian_noise_std'], img.shape).astype('uint8')
+                img = cv2.add(img, gaussian)
 
         nb_labels = len(labels)
         if nb_labels:
