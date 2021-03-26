@@ -227,6 +227,8 @@ class LoadImagesAndLabels(Dataset):
             augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
                         value_gain=hyp['augmentation_hsv_value'])
 
+
+
         nb_labels = len(labels)
         if nb_labels:
             labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
@@ -275,8 +277,7 @@ def load_image(self, index):
         height_original, width_original = img.shape[:2]  # orig hw
         r = self.img_size / max(height_original, width_original)  # resize image to img_size
         if r != 1:  # always resize down, only resize up if training with augmentation
-            interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
-            img = cv2.resize(img, (int(width_original * r), int(height_original * r)), interpolation=interp)
+            img = cv2.resize(img, (int(width_original * r), int(height_original * r)), interpolation=all_interpolation[np.random.randint(0, len(all_interpolation))])
         return img, img.shape[:2]  # img, hw_original, hw_resized
     else:
         return self.images[index], self.img_height_width[index]  # img, hw_original, hw_resized
@@ -352,6 +353,14 @@ def load_mosaic(self, index):
     return img4, labels4
 
 
+all_interpolation = [
+    cv2.INTER_NEAREST,
+    cv2.INTER_LINEAR,
+    cv2.INTER_AREA,
+    cv2.INTER_CUBIC,
+    cv2.INTER_LANCZOS4
+]
+
 def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
     # Resize image to a 32-pixel-multiple rectangle https://github.com/ultralytics/yolov3/issues/232
     shape = img.shape[:2]  # current shape [height, width]
@@ -378,7 +387,8 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scale
     dh /= 2
 
     if shape[::-1] != new_unpad:  # resize
-        img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
+        # Random resizing technique
+        img = cv2.resize(img, new_unpad, interpolation=all_interpolation[np.random.randint(0, len(all_interpolation))])
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
