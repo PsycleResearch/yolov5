@@ -525,12 +525,13 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, classes=None,
     return output
 
 
-def strip_optimizer(file_path='weights/best.pt'):
+def strip_optimizer(file_path='weights/best.pt', half_precision=False):
     x = torch.load(file_path, map_location=torch.device('cpu'))
     x['optimizer'] = None
     x['training_results'] = None
     x['epoch'] = -1
-    x['model'].half()  # to FP16
+    if half_precision:
+        x['model'].half()  # to FP16
     for p in x['model'].parameters():
         p.requires_grad = False
     torch.save(x, file_path)
