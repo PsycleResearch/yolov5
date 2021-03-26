@@ -184,7 +184,6 @@ class LoadImagesAndLabels(Dataset):
         hyp = self.hyperparameters
         if self.mosaic:
             img, labels = load_mosaic(self, index)
-            shapes = None
 
             # MixUp https://arxiv.org/pdf/1710.09412.pdf
             if random.random() < hyp['augmentation_mixup']:
@@ -227,9 +226,12 @@ class LoadImagesAndLabels(Dataset):
             augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
                         value_gain=hyp['augmentation_hsv_value'])
 
-            if np.random.random() > hyp['augmentation_gaussian_noise_probability']:
+            if random.random() < hyp['augmentation_gaussian_noise_probability']:
                 gaussian = np.random.normal(0, hyp['augmentation_gaussian_noise_std'], img.shape).astype('uint8')
                 img = cv2.add(img, gaussian)
+
+            if random.random() < hyp['augmentation_backgrounds']:
+                pass
 
         nb_labels = len(labels)
         if nb_labels:
