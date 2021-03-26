@@ -88,7 +88,6 @@ class LoadImagesAndLabels(Dataset):
         self.hyperparameters = hyperparameters
         self.image_weights = image_weights
         self.mosaic = self.hyperparameters['augmentation_mosaic']
-        self.augment_hsv = self.hyperparameters['augmentation_hsv']
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
 
@@ -144,9 +143,9 @@ class LoadImagesAndLabels(Dataset):
         if cache_images:
             gb = 0  # Gigabytes of cached images
             pbar = tqdm(range(len(self.img_files)), desc='Caching images')
-            self.img_hw0, self.img_hw = [None] * nb_images, [None] * nb_images
+            self.img_height_width = [None] * nb_images
             for i in pbar:  # max 10k images
-                self.images[i], self.img_hw0[i], self.img_hw[i] = load_image(self, i)  # img, hw_original, hw_resized
+                self.images[i], self.img_height_width[i] = load_image(self, i)  # img, hw_original, hw_resized
                 gb += self.images[i].nbytes
                 pbar.desc = 'Caching images (%.1fGB)' % (gb / 1E9)
 
@@ -196,23 +195,23 @@ class LoadImagesAndLabels(Dataset):
 
         else:
             # Load image
-            img, (h0, w0), (h, w) = load_image(self, index)
+            img, (height, width) = load_image(self, index)
 
             # Letterbox
             shape = self.img_size  # final letterboxed shape
             img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
-            shapes = (h0, w0), ((h / h0, w / w0), pad)  # for COCO mAP rescaling
 
             # Load labels
             labels = []
             x = self.labels[index]
             if x.size > 0:
-                # Normalized xywh to pixel xyxy format
+                # Get the pixel coordinates back
+                # This helps to "load" the labels whatever the resizing of the image (as long as it stays proportional)
                 labels = x.copy()
-                labels[:, 1] = ratio[0] * w * (x[:, 1] - x[:, 3] / 2) + pad[0]  # pad width
-                labels[:, 2] = ratio[1] * h * (x[:, 2] - x[:, 4] / 2) + pad[1]  # pad height
-                labels[:, 3] = ratio[0] * w * (x[:, 1] + x[:, 3] / 2) + pad[0]
-                labels[:, 4] = ratio[1] * h * (x[:, 2] + x[:, 4] / 2) + pad[1]
+                labels[:, 1] = ratio[0] * width * (x[:, 1] - x[:, 3] / 2) + pad[0]  # pad width
+                labels[:, 2] = ratio[1] * height * (x[:, 2] - x[:, 4] / 2) + pad[1]  # pad height
+                labels[:, 3] = ratio[0] * width * (x[:, 1] + x[:, 3] / 2) + pad[0]
+                labels[:, 4] = ratio[1] * height * (x[:, 2] + x[:, 4] / 2) + pad[1]
 
         if self.augment:
             # Augment image space
@@ -225,9 +224,8 @@ class LoadImagesAndLabels(Dataset):
                                                  perspective=hyp['augmentation_perspective_fraction'])
 
             # Augment colorspace
-            if self.augment_hsv:
-                augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
-                            value_gain=hyp['augmentation_hsv_value'])
+            augment_hsv(img, hue_gain=hyp['augmentation_hsv_hue'], saturation_gain=hyp['augmentation_hsv_saturation'],
+                        value_gain=hyp['augmentation_hsv_value'])
 
         nb_labels = len(labels)
         if nb_labels:
@@ -256,32 +254,32 @@ class LoadImagesAndLabels(Dataset):
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
         img = np.ascontiguousarray(img)
 
-        return torch.from_numpy(img), labels_out, self.img_files[index], shapes
+        return torch.from_numpy(img), labels_out, self.img_files[index]
 
     @staticmethod
     def collate_fn(batch):
-        img, label, path, shapes = zip(*batch)  # transposed
+        img, label, path = zip(*batch)  # transposed
         for i, l in enumerate(label):
             l[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(img, 0), torch.cat(label, 0), path, shapes
+        return torch.stack(img, 0), torch.cat(label, 0), path
 
 
 # Ancillary functions --------------------------------------------------------------------------------------------------
 def load_image(self, index):
-    # loads 1 image from dataset, returns img, original hw, resized hw
+    # loads 1 image from dataset, returns img, original height width, resized height width
     img = self.images[index]
     if img is None:  # not cached
         path = self.img_files[index]
         img = cv2.imread(path)  # BGR
         assert img is not None, 'Image Not Found ' + path
-        h0, w0 = img.shape[:2]  # orig hw
-        r = self.img_size / max(h0, w0)  # resize image to img_size
+        height_original, width_original = img.shape[:2]  # orig hw
+        r = self.img_size / max(height_original, width_original)  # resize image to img_size
         if r != 1:  # always resize down, only resize up if training with augmentation
             interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
-            img = cv2.resize(img, (int(w0 * r), int(h0 * r)), interpolation=interp)
-        return img, (h0, w0), img.shape[:2]  # img, hw_original, hw_resized
+            img = cv2.resize(img, (int(width_original * r), int(height_original * r)), interpolation=interp)
+        return img, img.shape[:2]  # img, hw_original, hw_resized
     else:
-        return self.images[index], self.img_hw0[index], self.img_hw[index]  # img, hw_original, hw_resized
+        return self.images[index], self.img_height_width[index]  # img, hw_original, hw_resized
 
 
 def augment_hsv(img, hue_gain=0.5, saturation_gain=0.5, value_gain=0.5):
@@ -305,7 +303,7 @@ def load_mosaic(self, index):
     indices = [index] + [random.randint(0, len(self.labels) - 1) for _ in range(3)]  # 3 additional image indices
     for i, index in enumerate(indices):
         # Load image
-        img, _, (h, w) = load_image(self, index)
+        img, (h, w) = load_image(self, index)
 
         # place img in img4
         if i == 0:  # top left

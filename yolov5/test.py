@@ -31,7 +31,7 @@ def test(model,
     seen = 0
     stats = []  # correct, conf, pcls, tcls
     print("VALIDATING")
-    for batch_i, (img, targets, paths, _) in enumerate(tqdm(dataloader)):
+    for batch_i, (img, targets, paths) in enumerate(tqdm(dataloader)):
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0

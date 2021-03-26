@@ -134,7 +134,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
 
         mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if is_cuda_available else 0)  # (GB)
         print(f'TRAINING Epoch: {epoch}/{epochs - 1} \tgpu_mem: {mem}')
-        for i, (images, targets, paths, _) in tqdm(enumerate(train_dataloader), total=nb_batches):
+        for i, (images, targets, paths) in tqdm(enumerate(train_dataloader), total=nb_batches):
             nb_integrated_batches = i + nb_batches * epoch
             images = images.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
@@ -206,12 +206,12 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
 
 
 if __name__ == '__main__':
-    weights = 'weights/yolov5s.pt'  # pre-trained weights
+    weights = 'weights/yolov5s_baptiste.pt'  # pre-trained weights
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
-    classes = ['copper']
+    classes = ['pli']
     hyperparameters_path = 'data/hyp.json'
-    epochs = 8
+    epochs = 2
     batch_size = 2
     accumulate = 1  # number of batches before optimizing
     img_size = 640

@@ -109,12 +109,6 @@ class Model(nn.Module):
 
 
 def parse_model(model_dict, input_channels):
-    ##########
-    # Replace "nc" in dict by "nb_classes"
-    assert model_dict['nc'][-1][3][0] == 'nc'
-    assert model_dict['head'][-1][3][0] == 'nc'
-    model_dict['head'][-1][3][0] = 'nb_classes'
-    ###########
 
     anchors, nb_classes, depth_multiple, width_multiple = model_dict['anchors'], model_dict['nb_classes'], model_dict['depth_multiple'], model_dict['width_multiple']
     nb_anchors = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors
