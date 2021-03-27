@@ -42,12 +42,11 @@ def exif_size(img):
     return s
 
 
-def create_dataloader(list_path, img_size, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8, cache_images=False):
+def create_dataloader(list_path, img_size, batch_size, stride, hyperparameters: dict = None, augment=False, workers=8):
     dataset = LoadImagesAndLabels(list_path, img_size, batch_size,
                                   augment=augment,  # augment images
                                   hyperparameters=hyperparameters,
-                                  stride=int(stride),
-                                  cache_images=cache_images)
+                                  stride=int(stride))
 
     batch_size = min(batch_size, len(dataset))
     nb_workers = min([os.cpu_count(), batch_size if batch_size > 1 else 0, workers])
@@ -77,7 +76,7 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None):
 class LoadImagesAndLabels(Dataset):
     def __init__(self, list_path, img_size=640, batch_size=16, augment=False, hyperparameters: dict = None,
                  image_weights=False,
-                 stride=32, cache_images=False):
+                 stride=32):
         try:
             image_files = []
             p = str(Path(list_path))
@@ -152,17 +151,6 @@ class LoadImagesAndLabels(Dataset):
             s = 'WARNING: No labels found in %s. See %s' % (os.path.dirname(file) + os.sep, help_url)
             print(s)
             assert not augment, '%s. Can not train without labels.' % s
-
-        # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
-        self.images = [None] * nb_images
-        if cache_images:
-            gb = 0  # Gigabytes of cached images
-            pbar = tqdm(range(len(self.img_files)), desc='Caching images')
-            self.img_height_width = [None] * nb_images
-            for i in pbar:  # max 10k images
-                self.images[i], self.img_height_width[i] = load_image(self, i)  # img, hw_original, hw_resized
-                gb += self.images[i].nbytes
-                pbar.desc = 'Caching images (%.1fGB)' % (gb / 1E9)
 
     def cache_labels(self, path='labels.cache'):
         # Cache dataset labels, check images and read shapes
@@ -310,18 +298,14 @@ class LoadImagesAndLabels(Dataset):
 # Ancillary functions --------------------------------------------------------------------------------------------------
 def load_image(self, index):
     # loads 1 image from dataset, returns img, original height width, resized height width
-    img = self.images[index]
-    if img is None:  # not cached
-        path = self.img_files[index]
-        img = cv2.imread(path)  # BGR
-        assert img is not None, 'Image Not Found ' + path
-        height_original, width_original = img.shape[:2]  # orig hw
-        r = self.img_size / max(height_original, width_original)  # resize image to img_size
-        if r != 1:  # always resize down, only resize up if training with augmentation
-            img = cv2.resize(img, (int(width_original * r), int(height_original * r)), interpolation=all_interpolation[np.random.randint(0, len(all_interpolation))])
-        return img, img.shape[:2]  # img, hw_original, hw_resized
-    else:
-        return self.images[index], self.img_height_width[index]  # img, hw_original, hw_resized
+    path = self.img_files[index]
+    img = cv2.imread(path)  # BGR
+    assert img is not None, 'Image Not Found ' + path
+    height_original, width_original = img.shape[:2]  # orig hw
+    r = self.img_size / max(height_original, width_original)  # resize image to img_size
+    if r != 1:  # always resize down, only resize up if training with augmentation
+        img = cv2.resize(img, (int(width_original * r), int(height_original * r)), interpolation=all_interpolation[np.random.randint(0, len(all_interpolation))])
+    return img, img.shape[:2]  # img, hw_original, hw_resized
 
 
 def augment_hsv(img, hue_gain=0.5, saturation_gain=0.5, value_gain=0.5):

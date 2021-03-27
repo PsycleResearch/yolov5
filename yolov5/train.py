@@ -31,7 +31,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
           logging_directory: str = 'runs/', accumulate: int = 1,
           resume: bool = False, img_size: int = 640, workers: int = 8,
           train_list_path: str = 'train.txt',
-          test_list_path: str = 'text.txt', classes: list = [], augment: bool = True, cache_images: bool = False):
+          test_list_path: str = 'text.txt', classes: list = [], augment: bool = True):
     is_cuda_available = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda_available else 'cpu')
     weights_directory = f'{logging_directory}/weights'
@@ -101,8 +101,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
                                                         hyperparameters=hyperparameters,
                                                         augment=augment,
-                                                        workers=workers,
-                                                        cache_images=cache_images)
+                                                        workers=workers)
     nb_batches = len(train_dataloader)
 
     # Model parameters
@@ -117,8 +116,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
                                            hyperparameters=hyperparameters,
                                            augment=False,
-                                           workers=workers,
-                                           cache_images=cache_images)
+                                           workers=workers)
 
     # Check anchors
     check_anchors(train_dataset, model=model, thr=hyperparameters['anchor_multiple_threshold'], img_size=img_size)
@@ -211,15 +209,14 @@ if __name__ == '__main__':
     test_list_path = 'test.txt'
     classes = ['pli']
     hyperparameters_path = 'data/hyp.json'
-    epochs = 2
-    batch_size = 2
+    epochs = 1
+    batch_size = 1
     accumulate = 1  # number of batches before optimizing
     img_size = 640
     resume = False  # can also be a string for the desired checkpoint
     logging_directory = 'runs/'
     workers = 8
     augment = True
-    cache_images = False
     metric_weights = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
 
     if resume:
