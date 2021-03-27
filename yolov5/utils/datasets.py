@@ -198,7 +198,7 @@ class LoadImagesAndLabels(Dataset):
 
             # Letterbox
             shape = self.img_size  # final letterboxed shape
-            img, ratio, pad = letterbox(img, shape, auto=False, scaleup=self.augment)
+            img, ratio, pad = letterbox(img, shape)
 
             # Load labels
             labels = []
@@ -385,39 +385,41 @@ all_interpolation = [
     cv2.INTER_CUBIC,
     cv2.INTER_LANCZOS4
 ]
+padding_color = [114, 114, 114]
 
-def letterbox(img, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True):
-    # Resize image to a 32-pixel-multiple rectangle https://github.com/ultralytics/yolov3/issues/232
-    shape = img.shape[:2]  # current shape [height, width]
-    if isinstance(new_shape, int):
-        new_shape = (new_shape, new_shape)
+
+def letterbox(img, new_shape: int = 640):
+    """
+    Resize image to a 32-pixel-multiple rectangle. Keep the proportions by adding constant padding
+    :return: the resized image, the ratio tuple (r_height, r_width) where r_height=new_height / old_height, the pad
+    tuple (p_vertical, p_horizontal)
+    """
+    # Make sure new_shape is correct
+    assert new_shape / 32 == new_shape // 32
+
+    height, width = img.shape[:2]
 
     # Scale ratio (new / old)
-    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
-    if not scaleup:  # only scale down, do not scale up (for better test mAP)
-        r = min(r, 1.0)
+    ratio = min(new_shape / height, new_shape / width)
 
     # Compute padding
-    ratio = r, r  # width, height ratios
-    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
-    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
-    if auto:  # minimum rectangle
-        dw, dh = np.mod(dw, 64), np.mod(dh, 64)  # wh padding
-    elif scaleFill:  # stretch
-        dw, dh = 0.0, 0.0
-        new_unpad = (new_shape[1], new_shape[0])
-        ratio = new_shape[1] / shape[1], new_shape[0] / shape[0]  # width, height ratios
+    new_unpad_width = int(round(width * ratio))
+    new_unpad_height = int(round(height * ratio))
+    padding_width = (new_shape - new_unpad_width)
+    padding_height = (new_shape - new_unpad_height)
 
-    dw /= 2  # divide padding into 2 sides
-    dh /= 2
-
-    if shape[::-1] != new_unpad:  # resize
+    if new_unpad_width != new_shape and new_unpad_width != new_shape:
         # Random resizing technique
-        img = cv2.resize(img, new_unpad, interpolation=all_interpolation[np.random.randint(0, len(all_interpolation))])
-    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-    img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
-    return img, ratio, (dw, dh)
+        img = cv2.resize(img, (new_unpad_width, new_unpad_height),
+                         interpolation=all_interpolation[np.random.randint(0, len(all_interpolation))])
+
+    padding_top = padding_height // 2
+    padding_bottom = padding_height - padding_height //2
+    padding_left = padding_width // 2
+    padding_right = padding_width - padding_width // 2
+    img = cv2.copyMakeBorder(img, padding_top, padding_bottom, padding_left, padding_right, cv2.BORDER_CONSTANT,
+                             value=padding_color)
+    return img, (ratio, ratio), (padding_left, padding_top)
 
 
 def augment_background(img, labels):
