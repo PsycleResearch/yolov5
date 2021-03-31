@@ -12,6 +12,7 @@ from scipy.cluster.vq import kmeans
 from tqdm import tqdm
 
 from yolov5.utils.torch_utils import is_parallel
+from yolov5.utils.autoanchor import check_anchor_order
 
 torch.set_printoptions(linewidth=320, precision=5, profile='long')
 np.set_printoptions(linewidth=320, formatter={'float_kind': '{:11.5g}'.format})  # format short g, %precision=5
@@ -65,16 +66,6 @@ def check_anchors(dataset, model, thr=4.0, img_size=640):
             print('Original anchors better than new anchors. Proceeding with original anchors.')
     print('')  # newline
 
-
-def check_anchor_order(m):
-    # Check anchor order against stride order for YOLOv5 Detect() module m, and correct if necessary
-    a = m.anchor_grid.prod(-1).view(-1)  # anchor area
-    da = a[-1] - a[0]  # delta a
-    ds = m.stride[-1] - m.stride[0]  # delta s
-    if da.sign() != ds.sign():  # same order
-        print('Reversing anchor order')
-        m.anchors[:] = m.anchors.flip(0)
-        m.anchor_grid[:] = m.anchor_grid.flip(0)
 
 
 def make_divisible(x, divisor):

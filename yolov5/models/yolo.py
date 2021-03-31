@@ -4,8 +4,11 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
+from yolact.utils.augmentations import Expand
 
-from yolov5.models.common import Conv, Bottleneck, SPP, Focus, BottleneckCSP, Concat
+from yolov5.models.experimental import GhostBottleneck, GhostConv, MixConv2d, CrossConv
+
+from yolov5.models.common import Conv, Bottleneck, SPP, Focus, BottleneckCSP, Concat, DWConv, Contract, C3
 from yolov5.utils.general import check_anchor_order, make_divisible
 from yolov5.utils.torch_utils import (
     fuse_conv_and_bn, model_info, initialize_weights)
@@ -16,7 +19,7 @@ logger = logging.getLogger(__name__)
 class Detect(nn.Module):
     stride = None  # strides computed during build
 
-    def __init__(self, nb_classes=80, anchors=(), ch=()):  # detection layer
+    def __init__(self, nb_classes=80, anchors=(), channels=()):  # detection layer
         super(Detect, self).__init__()
         self.nb_classes = nb_classes
         self.nb_outputs_per_anchor = nb_classes + 5
@@ -26,7 +29,7 @@ class Detect(nn.Module):
         a = torch.tensor(anchors).float().view(self.nb_detection_layers, -1, 2)
         self.register_buffer('anchors', a)  # shape(nb_detection_layers, nb_anchors, 2)
         self.register_buffer('anchor_grid', a.clone().view(self.nb_detection_layers, 1, -1, 1, 1, 2))  # shape(nb_detection_layers, 1, nb_anchors, 1, 1, 2)
-        self.m = nn.ModuleList(nn.Conv2d(x, self.nb_outputs_per_anchor * self.nb_anchors, 1) for x in ch)  # output conv
+        self.m = nn.ModuleList(nn.Conv2d(x, self.nb_outputs_per_anchor * self.nb_anchors, 1) for x in channels)  # output conv
 
     def forward(self, x):
         inference_output = []
@@ -53,19 +56,21 @@ class Detect(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg: dict, channels=3, nb_classes=None):  # model, input channels, number of classes
+    def __init__(self, cfg: dict, input_channels=3, nb_classes=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         # Loading pretrained weights
         self.yaml = cfg  # model dict
 
         # Define model
+        channels = self.yaml['channels'] = self.yaml.get('channels', input_channels)
         self.yaml['nb_classes'] = nb_classes  # override pretrained weights nb classes
         self.model, self.save = parse_model(deepcopy(self.yaml), input_channels=[channels])
+        self.names = [str(i) for i in range(self.yaml['nb_classes'])]
 
         # Build strides, anchors
         m = self.model[-1]  # Detect()
         if isinstance(m, Detect):
-            s = 128  # 2x min stride
+            s = 256  # 2x min stride
             m.stride = torch.tensor([s / x.shape[-2] for x in self.forward(torch.zeros(1, channels, s, s))])  # forward
             m.anchors /= m.stride.view(-1, 1, 1)
             check_anchor_order(m)
@@ -90,8 +95,8 @@ class Model(nn.Module):
         m = self.model[-1]  # Detect() module
         for mi, s in zip(m.m, m.stride):  # from
             b = mi.bias.view(m.nb_anchors, -1)  # conv.bias(255) to (3,85)
-            b[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
-            b[:, 5:] += math.log(0.6 / (m.nb_classes - 0.99)) if cf is None else torch.log(cf / cf.sum())  # cls
+            b.data[:, 4] += math.log(8 / (640 / s) ** 2)  # obj (8 objects per 640 image)
+            b.data[:, 5:] += math.log(0.6 / (m.nb_classes - 0.99)) if cf is None else torch.log(cf / cf.sum())  # cls
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def fuse(self):  # fuse model Conv2d() + BatchNorm2d() layers
@@ -109,8 +114,8 @@ class Model(nn.Module):
 
 
 def parse_model(model_dict, input_channels):
-
-    anchors, nb_classes, depth_multiple, width_multiple = model_dict['anchors'], model_dict['nb_classes'], model_dict['depth_multiple'], model_dict['width_multiple']
+    anchors, nb_classes, depth_multiple, width_multiple = model_dict['anchors'], model_dict['nb_classes'], \
+                                                          model_dict['depth_multiple'], model_dict['width_multiple']
     nb_anchors = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors
     nb_outputs = nb_anchors * (nb_classes + 5)
 
@@ -124,30 +129,38 @@ def parse_model(model_dict, input_channels):
                 pass
 
         _number = max(round(_number * depth_multiple), 1) if _number > 1 else _number  # depth gain
-        if _module in [nn.Conv2d, Conv, Bottleneck, SPP, Focus, BottleneckCSP]:
-            channels, output_channels = input_channels[_from], _args[0]
-            output_channels = make_divisible(output_channels * width_multiple, 8) if output_channels != nb_outputs else output_channels
+        if _module in [Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, DWConv, MixConv2d, Focus, CrossConv,
+                       BottleneckCSP, C3]:
+            c1, output_channels = input_channels[_from], _args[0]
+            if output_channels != nb_outputs:  # if not output
+                output_channels = make_divisible(output_channels * width_multiple, 8)
 
-            _args = [channels, output_channels, *_args[1:]]
-            if _module is BottleneckCSP:
-                _args.insert(2, _number)
+            _args = [c1, output_channels, *_args[1:]]
+            if _module in [BottleneckCSP, C3]:
+                _args.insert(2, _number)  # number of repeats
                 _number = 1
         elif _module is nn.BatchNorm2d:
             _args = [input_channels[_from]]
         elif _module is Concat:
-            output_channels = sum([input_channels[-1 if x == -1 else x + 1] for x in _from])
+            output_channels = sum([input_channels[x] for x in _from])
         elif _module is Detect:
-            _args.append([input_channels[x + 1] for x in _from])
+            _args.append([input_channels[x] for x in _from])
             if isinstance(_args[1], int):  # number of anchors
                 _args[1] = [list(range(_args[1] * 2))] * len(_from)
+        elif _module is Contract:
+            output_channels = input_channels[_from] * _args[0] ** 2
+        elif _module is Expand:
+            output_channels = input_channels[_from] // _args[0] ** 2
         else:
             output_channels = input_channels[_from]
 
         m_ = nn.Sequential(*[_module(*_args) for _ in range(_number)]) if _number > 1 else _module(*_args)  # module
         t = str(_module)[8:-2].replace('__main__.', '')  # module type
-        nb_params = sum([x.numel() for x in m_.parameters()])
-        m_.i, m_.f, m_.type, m_.np = i, _from, t, nb_params  # attach index, 'from' index, type, number params
+        np = sum([x.numel() for x in m_.parameters()])  # number params
+        m_.i, m_.f, m_.type, m_.np = i, _from, t, np  # attach index, 'from' index, type, number params
         save.extend(x % i for x in ([_from] if isinstance(_from, int) else _from) if x != -1)  # append to savelist
         layers.append(m_)
+        if i == 0:
+            input_channels = []
         input_channels.append(output_channels)
     return nn.Sequential(*layers), sorted(save)

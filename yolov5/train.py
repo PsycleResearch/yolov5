@@ -8,6 +8,7 @@ import numpy as np
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
+from torch import nn
 from torch.cuda import amp
 from tqdm import tqdm
 
@@ -15,8 +16,9 @@ from test import test
 from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
 from yolov5.utils.general import (
-    labels_to_class_weights, check_anchors, compute_loss, strip_optimizer, get_latest_run)
+    labels_to_class_weights, check_anchors, strip_optimizer, get_latest_run)
 from yolov5.utils.torch_utils import init_seeds, intersect_dicts
+from yolov5.utils.loss import ComputeLoss
 
 logger = logging.getLogger(__name__)
 
@@ -44,28 +46,26 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
 
     # Load pretrained model
     checkpoint = torch.load(weights, map_location=device)  # load checkpoint
-    model = Model(checkpoint['model'].yaml, channels=3, nb_classes=nb_classes).to(device)
+    model = Model(checkpoint['model'].yaml, input_channels=3, nb_classes=nb_classes).to(device)
     state_dict = checkpoint['model'].float().state_dict()  # to FP32
     state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
     model.load_state_dict(state_dict, strict=False)
 
     # Freeze
-    freeze = ['', ]  # parameter names to freeze (full or partial)
-    if any(freeze):
-        for k, v in model.named_parameters():
-            if any(x in k for x in freeze):
-                print('freezing %s' % k)
-                v.requires_grad = False
+    freeze = []
+    for k, v in model.named_parameters():
+        if any(x in k for x in freeze):
+            print('freezing %s' % k)
+            v.requires_grad = False
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
-    for k, v in model.named_parameters():
-        v.requires_grad = True
-        if '.bias' in k:
-            pg2.append(v)  # biases
-        elif '.weight' in k and '.bn' not in k:
-            pg1.append(v)  # apply weight decay
-        else:
-            pg0.append(v)  # all else
+    for k, v in model.named_modules():
+        if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):
+            pg2.append(v.bias)  # biases
+        if isinstance(v, nn.BatchNorm2d):
+            pg0.append(v.weight)  # no decay
+        elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):
+            pg1.append(v.weight)  # apply decay
 
     optimizer = optim.Adam(pg0, lr=hyperparameters['lr0'], betas=(hyperparameters['momentum'], 0.999))
     optimizer.add_param_group(
@@ -94,7 +94,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     del checkpoint, state_dict
 
     # Image sizes
-    grid_size = int(max(model.stride))  # max stride
+    grid_size = max(int(model.stride.max()), 32)   # max stride
     assert img_size == math.ceil(
         img_size / grid_size) * grid_size, f'img_size ({img_size}) must be a multiple of max stride ({grid_size})'
 
@@ -122,10 +122,20 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     # Check anchors
     check_anchors(train_dataset, model=model, thr=hyperparameters['anchor_multiple_threshold'], img_size=img_size)
 
+    # TODO: hyp['box'] *= 3. / nl  # scale to layers
+    nb_detection_layers = model.model[-1].nb_detection_layers
+    hyperparameters['cls_loss_gain'] *= nb_classes / 80. * 3. / nb_detection_layers  # scale to classes and layers
+    hyperparameters['obj_loss_gain'] *= (img_size / 640) ** 2 * 3. / nb_detection_layers  # scale to image size and layers
+    model.nb_classes = nb_classes
+    model.hyperparameters = hyperparameters
+    model.iou_loss_ratio = 1.0  # iou loss ratio (obj_loss = 1.0 or iou)
+    model.classes = classes
+
     # Start training
     nb_warmup_iterations = max(3 * nb_batches, 1e3)
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=is_cuda_available)
+    compute_loss = ComputeLoss(model)
     logger.info('Starting training for %g epochs...' % epochs)
     for epoch in range(start_epoch, epochs):
         model.train()
@@ -150,7 +160,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
             # Autocast
             with amp.autocast(enabled=is_cuda_available):
                 predictions = model(images)
-                loss = compute_loss(predictions, targets.to(device), model)
+                loss, _ = compute_loss(predictions, targets.to(device))
 
             # Backward
             scaler.scale(loss).backward()
@@ -205,12 +215,13 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
 
 
 if __name__ == '__main__':
-    weights = 'weights/yolov5s_baptiste.pt'  # pre-trained weights
+    # weights = 'weights/yolov5s_baptiste.pt'  # pre-trained weights
+    weights = 'weights/new_yolov5s_baptiste.pt'  # pre-trained weights
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
     classes = ['pli']
     hyperparameters_path = 'data/hyp.json'
-    epochs = 1
+    epochs = 50
     batch_size = 1
     accumulate = 1  # number of batches before optimizing
     img_size = 640
@@ -251,3 +262,5 @@ if __name__ == '__main__':
           accumulate=accumulate,
           img_size=img_size, resume=resume, logging_directory=logging_directory, workers=workers,
           metric_weights=metric_weights, augmentations=augmentations)
+
+# TODO: check new weights from master (new architecture?)
