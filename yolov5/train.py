@@ -2,7 +2,8 @@ import json
 import logging
 import math
 import os
-
+import albumentations as A
+import cv2
 import numpy as np
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
@@ -31,7 +32,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
           logging_directory: str = 'runs/', accumulate: int = 1,
           resume: bool = False, img_size: int = 640, workers: int = 8,
           train_list_path: str = 'train.txt',
-          test_list_path: str = 'text.txt', classes: list = [], augment: bool = True):
+          test_list_path: str = 'text.txt', classes: list = [], augmentations: list = []):
     is_cuda_available = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda_available else 'cpu')
     weights_directory = f'{logging_directory}/weights'
@@ -100,8 +101,9 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     # Trainloader
     train_dataloader, train_dataset = create_dataloader(train_list_path, img_size, batch_size, grid_size,
                                                         hyperparameters=hyperparameters,
-                                                        augment=augment,
-                                                        workers=workers)
+                                                        workers=workers,
+                                                        augment=True,
+                                                        augmentations=augmentations)
     nb_batches = len(train_dataloader)
 
     # Model parameters
@@ -115,7 +117,6 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     # Testloader
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
                                            hyperparameters=hyperparameters,
-                                           augment=False,
                                            workers=workers)
 
     # Check anchors
@@ -216,7 +217,6 @@ if __name__ == '__main__':
     resume = False  # can also be a string for the desired checkpoint
     logging_directory = 'runs/'
     workers = 8
-    augment = True
     metric_weights = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
 
     if resume:
@@ -229,8 +229,25 @@ if __name__ == '__main__':
     with open(hyperparameters_path) as f:
         hyperparameters = json.load(f)
 
+    augmentations = [
+        A.Blur(blur_limit=3, p=0.5),
+        A.CLAHE(clip_limit=4, p=0.5),
+        A.Downscale(scale_min=0.25, scale_max=0.25, interpolation=cv2.INTER_NEAREST, p=0.5),
+        A.GaussNoise(var_limit=25, p=0.5),
+        A.GaussianBlur(blur_limit=3, p=0.5),
+        A.GlassBlur(sigma=0.7, p=0.5),
+        A.HueSaturationValue(hue_shift_limit=0, sat_shift_limit=10, val_shift_limit=10, p=0.5),
+        A.ImageCompression(quality_lower=75, quality_upper=100, p=0.5),
+        A.MedianBlur(blur_limit=3, p=0.5),
+        A.MotionBlur(blur_limit=3, p=0.5),
+        A.MultiplicativeNoise(p=0.5),
+        A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, brightness_by_max=True, p=0.5),
+        A.RandomFog(fog_coef_lower=0.1, fog_coef_upper=0.3, p=0.5),
+        A.Flip(p=0.5),
+    ]
+
     train(hyperparameters, weights, train_list_path=train_list_path,
           test_list_path=test_list_path, classes=classes, epochs=epochs, batch_size=batch_size,
           accumulate=accumulate,
           img_size=img_size, resume=resume, logging_directory=logging_directory, workers=workers,
-          augment=augment, metric_weights=metric_weights)
+          metric_weights=metric_weights, augmentations=augmentations)
