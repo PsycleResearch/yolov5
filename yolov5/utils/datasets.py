@@ -226,10 +226,14 @@ class LoadImagesAndLabels(Dataset):
         if self.augment:
             transform = A.Compose(self.augmentations, bbox_params=A.BboxParams(format='pascal_voc',
                                                                                label_fields=['class_labels']))
-            transformed = transform(image=img, bboxes=labels[:, 1:], class_labels=labels[:, 0])
+            print(labels)
+            bboxes = labels[:, 1:] if len(labels) > 0 else []
+            class_labels = labels[:, 0] if len(labels) > 0 else []
+            transformed = transform(image=img, bboxes=bboxes, class_labels=class_labels)
             img = transformed['image']
             bboxes = transformed['bboxes']
-            labels[:, 1:] = bboxes
+            if len(labels) > 0:
+                labels[:, 1:] = bboxes
 
             ##############
             # cv2.imwrite('/tmp/image_new.png', img)
