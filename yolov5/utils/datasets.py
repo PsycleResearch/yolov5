@@ -11,7 +11,7 @@ from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from yolov5.utils.general import xyxy2xywh
+from yolov5.utils.general import xyxy2xywh, xywhn2xyxy
 
 help_url = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
 img_formats = ['.bmp', '.jpg', '.jpeg', '.png', '.tif', '.tiff', '.dng']
@@ -77,7 +77,6 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None):
 
 class LoadImagesAndLabels(Dataset):
     def __init__(self, list_path, img_size=640, batch_size=16, hyperparameters: dict = None,
-                 image_weights=False,
                  stride=32,
                  augment: bool = False,
                  augmentations: list = []):
@@ -103,7 +102,6 @@ class LoadImagesAndLabels(Dataset):
         self.batch = batch_index  # batch index of image
         self.img_size = img_size
         self.hyperparameters = hyperparameters
-        self.image_weights = image_weights
         self.mosaic = self.hyperparameters['augmentation_mosaic']
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
@@ -186,9 +184,6 @@ class LoadImagesAndLabels(Dataset):
         return len(self.img_files)
 
     def __getitem__(self, index):
-        if self.image_weights:
-            index = self.indices[index]
-
         if self.mosaic:
             img, labels = load_mosaic(self, index)
 
@@ -206,15 +201,9 @@ class LoadImagesAndLabels(Dataset):
 
             # Load labels
             labels = []
-            x = self.labels[index]
-            if x.size > 0:
-                # Get the pixel coordinates back
-                # This helps to "load" the labels whatever the resizing of the image (as long as it stays proportional)
-                labels = x.copy()
-                labels[:, 1] = ratio[0] * width * (x[:, 1] - x[:, 3] / 2) + pad[0]  # pad width
-                labels[:, 2] = ratio[1] * height * (x[:, 2] - x[:, 4] / 2) + pad[1]  # pad height
-                labels[:, 3] = ratio[0] * width * (x[:, 1] + x[:, 3] / 2) + pad[0]
-                labels[:, 4] = ratio[1] * height * (x[:, 2] + x[:, 4] / 2) + pad[1]
+            labels = self.labels[index].copy()
+            if labels.size:  # normalized xywh to pixel xyxy format
+                labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * width, ratio[1] * height, padw=pad[0], padh=pad[1])
 
             ##############
             # cv2.imwrite('/tmp/letterbox.png', img)

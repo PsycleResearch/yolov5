@@ -106,14 +106,6 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
                                                         augmentations=augmentations)
     nb_batches = len(train_dataloader)
 
-    # Model parameters
-    hyperparameters['cls_loss_gain'] *= nb_classes / 80.  # scale coco-tuned cls_loss_gain to current dataset
-    model.nb_classes = nb_classes
-    model.hyperparameters = hyperparameters
-    model.giou_loss_ratio = 1.0
-    model.class_weights = labels_to_class_weights(train_dataset.labels, nb_classes).to(device)
-    model.classes = classes
-
     # Testloader
     test_dataloader, _ = create_dataloader(test_list_path, img_size, batch_size, grid_size,
                                            hyperparameters=hyperparameters,
@@ -161,6 +153,7 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
             with amp.autocast(enabled=is_cuda_available):
                 predictions = model(images)
                 loss, _ = compute_loss(predictions, targets.to(device))
+                print(loss)
 
             # Backward
             scaler.scale(loss).backward()
@@ -219,10 +212,10 @@ if __name__ == '__main__':
     weights = 'weights/new_yolov5s_baptiste.pt'  # pre-trained weights
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
-    classes = ['pli']
+    classes = ['0', '1', '2', '3', '4']
     hyperparameters_path = 'data/hyp.json'
     epochs = 50
-    batch_size = 1
+    batch_size = 4
     accumulate = 1  # number of batches before optimizing
     img_size = 640
     resume = False  # can also be a string for the desired checkpoint
@@ -241,19 +234,19 @@ if __name__ == '__main__':
         hyperparameters = json.load(f)
 
     augmentations = [
-        A.Blur(blur_limit=3, p=0.5),
-        A.CLAHE(clip_limit=4, p=0.5),
-        A.Downscale(scale_min=0.25, scale_max=0.25, interpolation=cv2.INTER_NEAREST, p=0.5),
-        A.GaussNoise(var_limit=25, p=0.5),
-        A.GaussianBlur(blur_limit=3, p=0.5),
-        A.GlassBlur(sigma=0.7, p=0.5),
-        A.HueSaturationValue(hue_shift_limit=0, sat_shift_limit=10, val_shift_limit=10, p=0.5),
-        A.ImageCompression(quality_lower=75, quality_upper=100, p=0.5),
-        A.MedianBlur(blur_limit=3, p=0.5),
-        A.MotionBlur(blur_limit=3, p=0.5),
-        A.MultiplicativeNoise(p=0.5),
-        A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, brightness_by_max=True, p=0.5),
-        A.RandomFog(fog_coef_lower=0.1, fog_coef_upper=0.3, p=0.5),
+        # A.Blur(blur_limit=3, p=0.5),
+        # A.CLAHE(clip_limit=4, p=0.5),
+        # A.Downscale(scale_min=0.25, scale_max=0.25, interpolation=cv2.INTER_NEAREST, p=0.5),
+        # A.GaussNoise(var_limit=25, p=0.5),
+        # A.GaussianBlur(blur_limit=3, p=0.5),
+        # A.GlassBlur(sigma=0.7, p=0.5),
+        # A.HueSaturationValue(hue_shift_limit=0, sat_shift_limit=10, val_shift_limit=10, p=0.5),
+        # A.ImageCompression(quality_lower=75, quality_upper=100, p=0.5),
+        # A.MedianBlur(blur_limit=3, p=0.5),
+        # A.MotionBlur(blur_limit=3, p=0.5),
+        # A.MultiplicativeNoise(p=0.5),
+        # A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, brightness_by_max=True, p=0.5),
+        # A.RandomFog(fog_coef_lower=0.1, fog_coef_upper=0.3, p=0.5),
         A.Flip(p=0.5),
     ]
 
@@ -262,5 +255,3 @@ if __name__ == '__main__':
           accumulate=accumulate,
           img_size=img_size, resume=resume, logging_directory=logging_directory, workers=workers,
           metric_weights=metric_weights, augmentations=augmentations)
-
-# TODO: check new weights from master (new architecture?)

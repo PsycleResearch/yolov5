@@ -50,7 +50,7 @@ def test(model,
             target_class = labels[:, 0].tolist() if nb_labels else []  # target class
             seen += 1
 
-            if pred is None:
+            if len(pred) == 0:
                 if nb_labels:
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), target_class))
                 continue

@@ -65,7 +65,7 @@ class Model(nn.Module):
         channels = self.yaml['channels'] = self.yaml.get('channels', input_channels)
         self.yaml['nb_classes'] = nb_classes  # override pretrained weights nb classes
         self.model, self.save = parse_model(deepcopy(self.yaml), input_channels=[channels])
-        self.names = [str(i) for i in range(self.yaml['nb_classes'])]
+        self.classes = [str(i) for i in range(self.yaml['nb_classes'])]
 
         # Build strides, anchors
         m = self.model[-1]  # Detect()
