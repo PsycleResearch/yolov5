@@ -381,7 +381,7 @@ def compute_loss(predictions, targets, model):
             loss_box += (1.0 - giou).mean()  # giou loss
 
             # Objectness
-            tobj[image, anchor, gridy, gridx] = (1.0 - model.giou_loss_ratio) + model.giou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
+            tobj[image, anchor, gridy, gridx] = (1.0 - model.iou_loss_ratio) + model.iou_loss_ratio * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
 
             # Classification
             if model.nb_classes > 1:  # cls loss (only if multiple classes)
