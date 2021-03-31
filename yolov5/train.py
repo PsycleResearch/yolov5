@@ -12,6 +12,7 @@ from torch import nn
 from torch.cuda import amp
 from tqdm import tqdm
 
+from models.common import Conv
 from test import test
 from yolov5.models.yolo import Model
 from yolov5.utils.datasets import create_dataloader
@@ -46,8 +47,17 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
 
     # Load pretrained model
     checkpoint = torch.load(weights, map_location=device)  # load checkpoint
-    model = Model(checkpoint['model'].yaml, input_channels=3, nb_classes=nb_classes).to(device)
-    state_dict = checkpoint['model'].float().state_dict()  # to FP32
+    checkpoint_model = checkpoint['model']
+
+    # Compatibility updates
+    for m in checkpoint_model.modules():
+        if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+            m.inplace = True  # pytorch 1.7.0 compatibility
+        elif type(m) is Conv:
+            m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatibility
+
+    model = Model(checkpoint_model.yaml, input_channels=3, nb_classes=nb_classes).to(device)
+    state_dict = checkpoint_model.float().state_dict()  # to FP32
     state_dict = intersect_dicts(state_dict, model.state_dict())  # intersect
     model.load_state_dict(state_dict, strict=False)
 
