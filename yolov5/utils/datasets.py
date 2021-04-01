@@ -437,9 +437,8 @@ def letterbox(img, new_shape: int = 640):
 
 
 def augment_background(img, labels, backgrounds_folder):
-    # TODO: get randomly one background
     random_background_filepath = random.choice(os.listdir(backgrounds_folder))
-    background = cv2.imread(random_background_filepath, cv2.IMREAD_UNCHANGED).astype('uint8')
+    background = cv2.imread(f'{backgrounds_folder}/{random_background_filepath}', cv2.IMREAD_UNCHANGED).astype('uint8')
     labels = labels.astype(np.int)
     img_new = np.copy(background)
     labels_new = np.zeros(labels.shape)
