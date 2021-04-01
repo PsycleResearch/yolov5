@@ -13,13 +13,13 @@ def test(model,
          conf_thres,
          iou_thres,
          dataloader,
-         save_dir):
+         save_dir,
+         half_precision=False):
     # Initialize/load model and set device
     device = next(model.parameters()).device  # get model device
 
     # Half
-    half = False  # device.type != 'cpu'  # half precision only supported on CUDA
-    if half:
+    if half_precision:
         model.half()
 
     # Configure
@@ -33,7 +33,7 @@ def test(model,
     print("VALIDATING")
     for batch_i, (img, targets, paths) in enumerate(tqdm(dataloader)):
         img = img.to(device, non_blocking=True)
-        img = img.half() if half else img.float()  # uint8 to fp16/32
+        img = img.half() if half_precision else img.float()  # uint8 to fp16/32
         img /= 255.0
         targets = targets.to(device)
         _, _, height, width = img.shape  # batch size, channels, height, width
