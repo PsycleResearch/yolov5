@@ -258,17 +258,18 @@ class LoadImagesAndLabels(Dataset):
             # cv2.imwrite('/tmp/noise_boxes.png', img2)
             # ##############
 
-            # TODO: re-add background augments
-            #
-            # if random.random() < hyp['augmentation_backgrounds_probability']:
-            #     img, labels = augment_background(img, labels)
-            #
-            # ##############
-            # cv2.imwrite('/tmp/background.png', img)
-            # img2 = img.copy()
-            # plot_one_box(labels[0][1:], img2, label='test', line_thickness=3)
-            # cv2.imwrite('/tmp/background_boxes.png', img2)
-            # ##############
+            if len(labels) > 0:
+                if random.random() < self.hyperparameters['augmentation_backgrounds_probability']:
+                    img, labels = augment_background(img, labels,
+                                                     self.hyperparameters['augmentation_backgrounds_folder_path'])
+
+                    ##############
+                    cv2.imwrite('/tmp/background.png', img)
+                    img2 = img.copy()
+                    plot_one_box(labels[0][1:], img2, label='test', line_thickness=3)
+                    cv2.imwrite('/tmp/background_boxes.png', img2)
+                    pass
+                    ##############
 
         nb_labels = len(labels)
         if nb_labels:
@@ -435,9 +436,10 @@ def letterbox(img, new_shape: int = 640):
     return img, (ratio, ratio), (padding_left, padding_top)
 
 
-def augment_background(img, labels):
+def augment_background(img, labels, backgrounds_folder):
     # TODO: get randomly one background
-    background = cv2.imread('tmp/backgrounds/test.png', cv2.IMREAD_UNCHANGED).astype('uint8')
+    random_background_filepath = random.choice(os.listdir(backgrounds_folder))
+    background = cv2.imread(random_background_filepath, cv2.IMREAD_UNCHANGED).astype('uint8')
     labels = labels.astype(np.int)
     img_new = np.copy(background)
     labels_new = np.zeros(labels.shape)
