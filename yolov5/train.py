@@ -40,8 +40,8 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
     device = torch.device('cuda' if is_cuda_available else 'cpu')
     weights_directory = f'{logging_directory}/weights'
     os.makedirs(weights_directory, exist_ok=True)
-    last_weights_directory = weights_directory + '/last.pt'
-    best_weights_directory = weights_directory + '/best.pt'
+    last_weights_filepath = weights_directory + '/last.pt'
+    best_weights_filepath = weights_directory + '/best.pt'
     init_seeds(1)
     nb_classes = len(classes)
 
@@ -163,7 +163,6 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
             with amp.autocast(enabled=is_cuda_available):
                 predictions = model(images)
                 loss, _ = compute_loss(predictions, targets.to(device))
-                print(loss)
 
             # Backward
             scaler.scale(loss).backward()
@@ -199,20 +198,16 @@ def train(hyperparameters: dict, weights: str, metric_weights: list = None, epoc
                       'optimizer': None if final_epoch else optimizer.state_dict()}
 
         # Save last, best and delete
-        torch.save(checkpoint, last_weights_directory)
+        torch.save(checkpoint, last_weights_filepath)
         if best_fitness == fitness_i:
-            torch.save(checkpoint, best_weights_directory)
+            torch.save(checkpoint, best_weights_filepath)
         del checkpoint
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
 
     # Strip optimizers
-    flast, fbest = f'{weights_directory}/last.pt', f'{weights_directory}/best.pt'
-    for f1, f2 in zip([last_weights_directory, best_weights_directory], [flast, fbest]):
-        if os.path.exists(f1):
-            os.rename(f1, f2)  # rename
-            ispt = f2.endswith('.pt')  # is *.pt
-            strip_optimizer(f2) if ispt else None  # strip optimizer
+    strip_optimizer(last_weights_filepath)
+    strip_optimizer(best_weights_filepath)
 
     torch.cuda.empty_cache()
 
@@ -222,11 +217,11 @@ if __name__ == '__main__':
     weights = 'weights/new_yolov5s_baptiste.pt'  # pre-trained weights
     train_list_path = 'train.txt'
     test_list_path = 'test.txt'
-    classes = ['0', '1', '2', '3', '4']
+    classes = ['pointilles']
     hyperparameters_path = 'data/hyp.json'
-    epochs = 50
-    batch_size = 4
-    accumulate = 1  # number of batches before optimizing
+    epochs = 10
+    batch_size = 1
+    accumulate = 4  # number of batches before optimizing
     img_size = 640
     resume = False  # can also be a string for the desired checkpoint
     logging_directory = 'runs/'
