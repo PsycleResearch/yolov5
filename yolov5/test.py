@@ -18,9 +18,9 @@ def test(model,
     device = next(model.parameters()).device  # get model device
 
     # Half
-    half = device.type != 'cpu'  # half precision only supported on CUDA
-    # if half:
-    #     model.half()
+    half = False  # device.type != 'cpu'  # half precision only supported on CUDA
+    if half:
+        model.half()
 
     # Configure
     model.eval()
