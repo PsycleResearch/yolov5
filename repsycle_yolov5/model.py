@@ -9,7 +9,7 @@ from common import *
 
 class Model(torch.nn.Module):
 
-    def __init__(self, nb_classes=2, nb_channels=3):
+    def __init__(self, nb_classes=1, nb_channels=3):
         super(Model, self).__init__()
 
         self.nb_classes = nb_classes

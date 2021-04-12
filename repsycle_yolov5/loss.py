@@ -16,5 +16,59 @@ class Loss(nn.Module):
         self.lambda_obj = 1
         self.lambda_bbox = 10
 
-    def forward(self, predictions, target, anchors):
-        pass
+    # Coord XY + Coord WH + Coord
+
+    def forward(self,predictions, target, anchors):
+
+        # import matplotlib.pyplot as plt
+        # import numpy as np
+        # plt.matshow(target[0,0,...,2].detach().numpy())
+        # plt.show()
+
+        anchors = anchors.reshape((1, 3, 1, 1, 2))
+
+        # predictions
+        pxy = predictions[..., 0:2].sigmoid() * 2. - 0.5
+        pwh = (predictions[..., 2:4].sigmoid() * 2) ** 2 * anchors
+        po = predictions[..., 4:5].sigmoid()
+        pc = predictions[..., 5:].sigmoid()
+        pbox = torch.cat((pxy, pwh), 4)
+
+        # targets
+        txy = target[..., 0:2]
+        twh = target[..., 2:4]
+        to = target[..., 4:5]
+        tc = target[..., 5]
+        tbox = torch.cat((txy, twh), 4)
+
+        obj = target[..., 4] == 1
+        noobj = target[..., 4] == 0
+
+        ious = intersection_over_union(pbox[obj], tbox[obj]).detach()
+
+        # noobj loss:
+        no_object_loss = self.bce((po[noobj]), (to[noobj]))
+
+        # obj loss:
+        object_loss = self.mse(po[obj], ious * to[obj])
+
+        # bbox loss
+        box_loss = self.mse(pbox[obj], tbox[obj])
+
+        # class loss
+        class_loss = self.entropy(pc[obj], tc[obj].long())
+
+        # print(no_object_loss)
+        # print(object_loss)
+        # print(box_loss)
+        # print(class_loss)
+
+        loss = self.lambda_obj * object_loss + \
+               self.lambda_noobj * no_object_loss + \
+               self.lambda_class * class_loss + \
+               self.lambda_bbox + box_loss
+
+        # print(loss)
+
+        return loss
+

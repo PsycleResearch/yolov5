@@ -7,6 +7,7 @@ from utils import (iou_width_height as iou,
 import torch
 from torch.utils.data import Dataset, DataLoader
 import json
+import cv2
 
 class YoloDataset(Dataset):
     def __init__(self,
@@ -14,7 +15,7 @@ class YoloDataset(Dataset):
                  labels,
                  anchors,
                  image_size,
-                 S=[13, 26, 52],
+                 S=[20, 40, 80],
                  C=20):
 
         with open(labels, 'r') as f:
@@ -30,14 +31,20 @@ class YoloDataset(Dataset):
         self.ignore_iou_tresh = 0.5
         self.nb_anchors_per_scale = self.nb_anchors // 3
 
+        self.img_dir = img_dir
+
     def __len__(self):
         return len(self.annotations)
 
     def __getitem__(self, idx):
 
-        img_path = img_dir + self.image_id[idx] + '.jpeg'
+        img_path = self.img_dir + self.image_id[idx] + '.jpeg'
         bboxes = self.annotations[idx] # [x, y, w, h, class]
-        image = Image.open(img_path).convert("RGB")
+        image = cv2.imread(img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = cv2.resize(image, (640, 640))
+
+        import matplotlib.pyplot as plt
 
         targets = [torch.zeros(self.nb_anchors // 3, S, S, 6) for S in self.S] #[prob, x, y, w, h, c]
 
@@ -53,6 +60,7 @@ class YoloDataset(Dataset):
             has_anchor = [False] * 3
 
             for anchor_idx in anchor_indices:
+
                 scale_idx = anchor_idx // self.nb_anchors_per_scale
                 anchor_on_scale = anchor_idx % self.nb_anchors_per_scale
                 S = self.S[scale_idx]
@@ -61,21 +69,34 @@ class YoloDataset(Dataset):
                 i, j = int(S*y), int(S*x)
 
                 # It's possible but rare that two objects with same bbox are taken
-                anchor_taken = targets[scale_idx][anchor_on_scale, i, j, 0]
+                anchor_taken = targets[scale_idx][anchor_on_scale, i, j, 4]
 
-                if not anchor_taken and has_anchor[scale_idx]:
-                    targets[scale_idx][anchor_on_scale, i, j, 0] = 1
-                    x_cell, y_cell = S*x - j, S*i - i
+                if not anchor_taken and not has_anchor[scale_idx]:
+                    targets[scale_idx][anchor_on_scale, i, j, 4] = 1
+                    x_cell, y_cell = S*x - j, S*y - i
                     width_cell, height_cell = width * S, height * S
 
                     box_coordinates = torch.tensor([x_cell, y_cell, width_cell, height_cell])
-                    targets[scale_idx][anchor_on_scale, i, j, 1:5]= box_coordinates
+                    targets[scale_idx][anchor_on_scale, i, j, 0:4]= box_coordinates
                     targets[scale_idx][anchor_on_scale, i, j, 5] = int(class_label)
 
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_tresh:
-                  targets[scale_idx][anchor_on_scale, i, j, 0] = -1  # ignore prediction
+                    targets[scale_idx][anchor_on_scale, i, j, 4] = -1  # ignore prediction
 
-        return image, targets
+        # print(bboxes)
+        # plt.imshow(image)
+        # plt.show()
+
+        # debug
+        # for i in range(3):
+        #     for j in range(3):
+        #         plt.matshow(targets[i][j, :, :, 4])
+        #         plt.show()
+
+        image = image.reshape((3, 640, 640))
+        image = torch.tensor(image).float()#.to('cuda:0')
+
+        return image, tuple(targets[::-1])
 
 if __name__ == '__main__':
 
@@ -90,7 +111,3 @@ if __name__ == '__main__':
     ]
 
     ds = YoloDataset(img_dir, labels, anchors, image_size)
-
-    for i in range(len(ds)):
-        target = ds[i][1]
-        None
