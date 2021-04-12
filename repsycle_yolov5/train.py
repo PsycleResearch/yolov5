@@ -16,16 +16,21 @@ if __name__ == '__main__':
         [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)],
     ]
 
+    IMAGE_SIZE = 640
+    S = [IMAGE_SIZE // 80, IMAGE_SIZE // 40, IMAGE_SIZE // 20]
+    scaled_anchors = torch.tensor(anchors) * torch.tensor(S).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
+    # print(scaled_anchors)
+
     model = create('yolov5s.pt', pretrained=True, channels=3, classes=1)
     model = model.to("cuda:0")
     model.train()
 
     img_dir = './images/'
     labels = './datas/labels.json'
-    image_size = (0, 0)
+    image_size = (640, 640)
 
     dataset = YoloDataset(img_dir, labels, anchors, image_size)
-    loader = DataLoader(dataset, batch_size=1, num_workers=0, shuffle=True)
+    loader = DataLoader(dataset, batch_size=4, num_workers=0, shuffle=True)
     optimizer = optim.Adam(model.parameters(), lr=0.9, weight_decay=0.001)
     loss = Loss()
     scaler = torch.cuda.amp.GradScaler()
@@ -40,16 +45,14 @@ if __name__ == '__main__':
         for img, target in loader:
             img = img.to('cuda:0')
 
-            print(ctr)
-            ctr += 1
-
             x = model(img)
 
             with torch.cuda.amp.autocast():
-                loss1 = loss.forward(x[0], target[0], torch.tensor(anchors)[0].to('cuda:0'))
-                loss2 = loss.forward(x[1], target[1], torch.tensor(anchors)[1].to('cuda:0'))
-                loss3 = loss.forward(x[2], target[2], torch.tensor(anchors)[2].to('cuda:0'))
+                loss1 = loss.forward(x[0], target[0].to('cuda:0'), scaled_anchors[0].to('cuda:0'))
+                loss2 = loss.forward(x[1], target[1].to('cuda:0'), scaled_anchors[1].to('cuda:0'))
+                loss3 = loss.forward(x[2], target[2].to('cuda:0'), scaled_anchors[2].to('cuda:0'))
                 full_loss = loss1 + loss2 + loss3
+                #print(full_loss)
 
             losses.append(full_loss.item())
             optimizer.zero_grad()
@@ -62,4 +65,3 @@ if __name__ == '__main__':
         mean_loss = sum(losses) / len(losses)
         print(mean_loss)
 
-            # loop.set_postfix(loss=mean_loss)

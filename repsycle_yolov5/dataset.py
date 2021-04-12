@@ -21,8 +21,8 @@ class YoloDataset(Dataset):
         with open(labels, 'r') as f:
             self.datas = json.load(f)
 
-        self.image_id = list(self.datas.keys())
-        self.annotations = list(self.datas.values())
+        self.image_id = list(self.datas.keys())[:100]
+        self.annotations = list(self.datas.values())[:100]
 
         self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
@@ -77,7 +77,7 @@ class YoloDataset(Dataset):
                     width_cell, height_cell = width * S, height * S
 
                     box_coordinates = torch.tensor([x_cell, y_cell, width_cell, height_cell])
-                    targets[scale_idx][anchor_on_scale, i, j, 0:4]= box_coordinates
+                    targets[scale_idx][anchor_on_scale, i, j, 0:4] = box_coordinates
                     targets[scale_idx][anchor_on_scale, i, j, 5] = int(class_label)
 
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_tresh:

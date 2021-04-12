@@ -30,7 +30,7 @@ class Loss(nn.Module):
         # predictions
         pxy = predictions[..., 0:2].sigmoid() * 2. - 0.5
         pwh = (predictions[..., 2:4].sigmoid() * 2) ** 2 * anchors
-        po = predictions[..., 4:5].sigmoid()
+        po = predictions[..., 4:5]
         pc = predictions[..., 5:].sigmoid()
         pbox = torch.cat((pxy, pwh), 4)
 
@@ -39,7 +39,7 @@ class Loss(nn.Module):
         twh = target[..., 2:4]
         to = target[..., 4:5]
         tc = target[..., 5]
-        tbox = torch.cat((txy, twh), 4)
+        tbox = torch.cat((txy, twh), 4).to('cuda:0')
 
         obj = target[..., 4] == 1
         noobj = target[..., 4] == 0
@@ -47,7 +47,7 @@ class Loss(nn.Module):
         ious = intersection_over_union(pbox[obj], tbox[obj]).detach()
 
         # noobj loss:
-        no_object_loss = self.bce((po[noobj]), (to[noobj]))
+        no_object_loss = self.bce(po[noobj], to[noobj])
 
         # obj loss:
         object_loss = self.mse(po[obj], ious * to[obj])
@@ -60,7 +60,7 @@ class Loss(nn.Module):
 
         # print(no_object_loss)
         # print(object_loss)
-        # print(box_loss)
+        print(box_loss)
         # print(class_loss)
 
         loss = self.lambda_obj * object_loss + \
