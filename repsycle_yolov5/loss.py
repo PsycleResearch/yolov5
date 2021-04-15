@@ -2,6 +2,11 @@ import torch.nn as nn
 import torch
 from utils import intersection_over_union
 
+class BCEWithLogitLoss:
+
+    def __init__(self, input_size, num_classes):
+        super(nn.BCEWithLogitsLoss(), self).__init__()
+
 class Loss(nn.Module):
 
     def __init__(self):
@@ -30,16 +35,20 @@ class Loss(nn.Module):
         # predictions
         pxy = predictions[..., 0:2].sigmoid() * 2. - 0.5
         pwh = (predictions[..., 2:4].sigmoid() * 2) ** 2 * anchors
+
         po = predictions[..., 4:5]
-        pc = predictions[..., 5:].sigmoid()
+        pc = predictions[..., 5:]
         pbox = torch.cat((pxy, pwh), 4)
 
         # targets
         txy = target[..., 0:2]
         twh = target[..., 2:4]
         to = target[..., 4:5]
-        tc = target[..., 5]
+        tc = target[..., 5:]
         tbox = torch.cat((txy, twh), 4).to('cuda:0')
+
+        # for i in torch.flatten(pwh):
+        #     if i > 0 : print(i)
 
         obj = target[..., 4] == 1
         noobj = target[..., 4] == 0
@@ -49,18 +58,25 @@ class Loss(nn.Module):
         # noobj loss:
         no_object_loss = self.bce(po[noobj], to[noobj])
 
-        # obj loss:
-        object_loss = self.mse(po[obj], ious * to[obj])
+        if torch.sum(obj) > 0:
+            # objectness loss:
+            object_loss = self.mse(po[obj], ious * to[obj])
+            # bbox loss
+            box_loss = self.mse(pbox[obj], tbox[obj])
+            # class loss
+            class_loss = self.bce(pc[obj], tc[obj])
+        else:
+            # objectness loss:
+            object_loss = self.mse(torch.zeros(1), torch.zeros(1))
+            # bbox loss
+            box_loss = self.mse(torch.zeros(1), torch.zeros(1))
+            # class loss
+            class_loss = self.bce(torch.zeros(1), torch.zeros(1))
 
-        # bbox loss
-        box_loss = self.mse(pbox[obj], tbox[obj])
-
-        # class loss
-        class_loss = self.entropy(pc[obj], tc[obj].long())
-
-        # print(no_object_loss)
+        # print(to[noobj])
+        # print(no_object_loss) #OK
         # print(object_loss)
-        print(box_loss)
+        # print(box_loss)
         # print(class_loss)
 
         loss = self.lambda_obj * object_loss + \
@@ -68,7 +84,7 @@ class Loss(nn.Module):
                self.lambda_class * class_loss + \
                self.lambda_bbox + box_loss
 
-        # print(loss)
+        #print(loss)
 
         return loss
 

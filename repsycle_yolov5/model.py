@@ -6,6 +6,7 @@ import os
 import platform
 from pathlib import Path
 from common import *
+import config
 
 class Model(torch.nn.Module):
 
@@ -162,20 +163,20 @@ class Model(torch.nn.Module):
             batch_size, _, ny, nx = x.shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
             x = x.view(batch_size, self.nb_anchors, self.nb_output, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
 
-            if not self.training:
-                if self.grid[i].shape[2:4] != x.shape[2:4]:
-                    self.grid[i] = self._make_grid(nx, ny).to(x.device)
-
-                y = x.sigmoid()
-                y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i].to(x.device)) * self.stride[i]  # xy
-                y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
-                z.append(y.view(batch_size, -1, self.nb_output))
+            # if not self.training:
+            #     if self.grid[i].shape[2:4] != x.shape[2:4]:
+            #         self.grid[i] = self._make_grid(nx, ny).to(x.device)
+            #
+            #     y = x.sigmoid()
+            #     y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i].to(x.device)) * self.stride[i]  # xy
+            #     y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
+            #     z.append(y.view(batch_size, -1, self.nb_output))
 
             x_[i] = x
 
             i+=1
 
-        return x_ if self.training else (torch.cat(z, 1), x_)
+        return x_ #if self.training else (torch.cat(z, 1), x_)
 
     def forward(self, x):
         p3, p4, p5, x = self._build_backbone(x)
@@ -249,7 +250,8 @@ if __name__ == '__main__':
 
     model.eval()
     img = torch.rand((1, 3, 640, 640))
-    o, x_ = model(img)
+    x_ = model(img)
+
     for out in x_:
         print(out.shape)
 

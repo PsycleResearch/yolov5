@@ -2,27 +2,25 @@ import numpy as np
 import os
 import pandas as pd
 from PIL import Image
+import config
 from utils import (iou_width_height as iou,
                    non_max_suppression as nms)
 import torch
 from torch.utils.data import Dataset, DataLoader
 import json
 import cv2
+import matplotlib.pyplot as plt
 
 class YoloDataset(Dataset):
-    def __init__(self,
-                 img_dir,
-                 labels,
-                 anchors,
-                 image_size,
-                 S=[20, 40, 80],
-                 C=20):
+    def __init__(self, img_dir, labels, anchors, image_size, S=[80, 40, 20], C=1):
 
         with open(labels, 'r') as f:
             self.datas = json.load(f)
 
-        self.image_id = list(self.datas.keys())[:100]
-        self.annotations = list(self.datas.values())[:100]
+        self.img_size = image_size
+
+        self.image_id = list(self.datas.keys())[:10]
+        self.annotations = list(self.datas.values())[:10]
 
         self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
@@ -42,11 +40,17 @@ class YoloDataset(Dataset):
         bboxes = self.annotations[idx] # [x, y, w, h, class]
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, (640, 640))
+        image = cv2.resize(image, self.img_size)
 
-        import matplotlib.pyplot as plt
+        # plt.imshow(image)
+        # plt.show()
 
-        targets = [torch.zeros(self.nb_anchors // 3, S, S, 6) for S in self.S] #[prob, x, y, w, h, c]
+        image = image / 255.
+
+        image = image.reshape((3, 640, 640))
+        image = torch.tensor(image).float().to(config.device)
+
+        targets = [torch.zeros(self.nb_anchors // 3, S, S, 5 + self.C) for S in self.S] #[prob, x, y, w, h, c]
 
         # Choose which anchors is responsible for each cells following highest IOU
         for bboxe in bboxes:
@@ -65,7 +69,8 @@ class YoloDataset(Dataset):
                 anchor_on_scale = anchor_idx % self.nb_anchors_per_scale
                 S = self.S[scale_idx]
 
-                # In Yolo, each coordinates are relative to each cells:
+                # In Yolo, eac
+                # h coordinates are relative to each cells:
                 i, j = int(S*y), int(S*x)
 
                 # It's possible but rare that two objects with same bbox are taken
@@ -75,10 +80,12 @@ class YoloDataset(Dataset):
                     targets[scale_idx][anchor_on_scale, i, j, 4] = 1
                     x_cell, y_cell = S*x - j, S*y - i
                     width_cell, height_cell = width * S, height * S
-
                     box_coordinates = torch.tensor([x_cell, y_cell, width_cell, height_cell])
+
                     targets[scale_idx][anchor_on_scale, i, j, 0:4] = box_coordinates
-                    targets[scale_idx][anchor_on_scale, i, j, 5] = int(class_label)
+                    one_hot_class = torch.zeros(self.C)
+                    one_hot_class[int(class_label)] = 1
+                    targets[scale_idx][anchor_on_scale, i, j, 5:] = one_hot_class
 
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_tresh:
                     targets[scale_idx][anchor_on_scale, i, j, 4] = -1  # ignore prediction
@@ -92,22 +99,14 @@ class YoloDataset(Dataset):
         #     for j in range(3):
         #         plt.matshow(targets[i][j, :, :, 4])
         #         plt.show()
+        # print(bboxe)
 
-        image = image.reshape((3, 640, 640))
-        image = torch.tensor(image).float()#.to('cuda:0')
+        #print(targets[0][1,...,5:].shape)
 
-        return image, tuple(targets[::-1])
+        return image, tuple(targets)
 
 if __name__ == '__main__':
 
     img_dir = './images/'
     labels = './datas/labels.json'
-    image_size = (0, 0)
-
-    anchors = [
-        [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)],
-        [(0.07, 0.15), (0.15, 0.11), (0.14, 0.29)],
-        [(0.02, 0.03), (0.04, 0.07), (0.08, 0.06)],
-    ]
-
-    ds = YoloDataset(img_dir, labels, anchors, image_size)
+    ds = YoloDataset(img_dir, labels, anchors=config.anchors, image_size=config.image_size)
