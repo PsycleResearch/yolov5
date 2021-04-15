@@ -22,8 +22,8 @@ def train(model, epochs):
     labels = './datas/labels.json'
 
     dataset = YoloDataset(img_dir, labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
-    loader = DataLoader(dataset, batch_size=6, num_workers=0, shuffle=True)
-    optimizer = optim.Adam(model.parameters(), lr=0.9, weight_decay=0.001)
+    loader = DataLoader(dataset, batch_size=1, num_workers=0, shuffle=True)
+    optimizer = optim.Adam(model.parameters(), lr=0.9, weight_decay=0.0001)
     loss = Loss()
     scaler = torch.cuda.amp.GradScaler()
 
@@ -60,10 +60,10 @@ if __name__ == '__main__':
 
     model = create('yolov5s.pt', pretrained=True, channels=3, classes=config.nb_classes)
 
-    epochs = 100
+    epochs = 200
     train(model, epochs)
 
-    # torch.save(model.state_dict(), 'test.pt')
+    torch.save(model.state_dict(), 'test.pt')
     # model.load_state_dict(torch.load('test.pt'))
     # test(model)
 

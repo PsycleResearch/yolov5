@@ -3,7 +3,7 @@ import torch
 image_size = 640
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-scales = [80, 40, 20]
+scales = [image_size // 80, image_size // 40, image_size // 20]
 nb_classes = 1
 
 # anchors = [

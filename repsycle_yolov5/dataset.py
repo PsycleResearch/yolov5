@@ -80,12 +80,14 @@ class YoloDataset(Dataset):
                     targets[scale_idx][anchor_on_scale, i, j, 4] = 1
                     x_cell, y_cell = S*x - j, S*y - i
                     width_cell, height_cell = width * S, height * S
+
                     box_coordinates = torch.tensor([x_cell, y_cell, width_cell, height_cell])
 
                     targets[scale_idx][anchor_on_scale, i, j, 0:4] = box_coordinates
                     one_hot_class = torch.zeros(self.C)
                     one_hot_class[int(class_label)] = 1
                     targets[scale_idx][anchor_on_scale, i, j, 5:] = one_hot_class
+                    has_anchor[scale_idx] = True
 
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_tresh:
                     targets[scale_idx][anchor_on_scale, i, j, 4] = -1  # ignore prediction
