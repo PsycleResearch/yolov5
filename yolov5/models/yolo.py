@@ -4,11 +4,10 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
-from yolact.utils.augmentations import Expand
 
 from yolov5.models.experimental import GhostBottleneck, GhostConv, MixConv2d, CrossConv
 
-from yolov5.models.common import Conv, Bottleneck, SPP, Focus, BottleneckCSP, Concat, DWConv, Contract, C3
+from yolov5.models.common import Conv, Bottleneck, SPP, Focus, BottleneckCSP, Concat, DWConv, Contract, C3, Expand
 from yolov5.utils.general import check_anchor_order, make_divisible
 from yolov5.utils.torch_utils import (
     fuse_conv_and_bn, model_info, initialize_weights)
