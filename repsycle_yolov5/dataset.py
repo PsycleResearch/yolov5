@@ -19,8 +19,8 @@ class YoloDataset(Dataset):
             self.datas = json.load(f)
 
         self.img_size = image_size
-        self.image_id = list(self.datas.keys())[:256]
-        self.annotations = list(self.datas.values())[:256]
+        self.image_id = list(self.datas.keys())[:100]
+        self.annotations = list(self.datas.values())[:100]
 
         self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
@@ -107,7 +107,7 @@ def test():
 
     img_dir = './images/'
     labels = './datas/temp.json'
-    ds = YoloDataset(img_dir, labels, anchors=config.anchors, image_size=config.image_size)
+    ds = YoloDataset(img_dir, labels, anchors=config.anchors, image_size=(config.image_size, config.image_size))
 
     for img, targets in ds:
         labels = cell_to_coordinates(img, targets)
