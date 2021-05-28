@@ -10,6 +10,7 @@ from torch.utils.data import Dataset, DataLoader
 import json
 import cv2
 import matplotlib.pyplot as plt
+from utils import letterbox, plot_images, cell_to_coordinates
 
 class YoloDataset(Dataset):
     def __init__(self, img_dir, labels, anchors, image_size, S=[80, 40, 20], C=1):
@@ -18,9 +19,8 @@ class YoloDataset(Dataset):
             self.datas = json.load(f)
 
         self.img_size = image_size
-
-        self.image_id = list(self.datas.keys())[:10]
-        self.annotations = list(self.datas.values())[:10]
+        self.image_id = list(self.datas.keys())[:256]
+        self.annotations = list(self.datas.values())[:256]
 
         self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
@@ -40,14 +40,10 @@ class YoloDataset(Dataset):
         bboxes = self.annotations[idx] # [x, y, w, h, class]
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
         image = cv2.resize(image, self.img_size)
-
-        # plt.imshow(image)
-        # plt.show()
-
         image = image / 255.
-
-        image = image.reshape((3, 640, 640))
+        image = image.reshape((3, image.shape[0], image.shape[1]))
         image = torch.tensor(image).float().to(config.device)
 
         targets = [torch.zeros(self.nb_anchors // 3, S, S, 5 + self.C) for S in self.S] #[prob, x, y, w, h, c]
@@ -107,8 +103,15 @@ class YoloDataset(Dataset):
 
         return image, tuple(targets)
 
-if __name__ == '__main__':
+def test():
 
     img_dir = './images/'
-    labels = './datas/labels.json'
+    labels = './datas/temp.json'
     ds = YoloDataset(img_dir, labels, anchors=config.anchors, image_size=config.image_size)
+
+    for img, targets in ds:
+        labels = cell_to_coordinates(img, targets)
+        plot_images(img, labels)
+
+if __name__ == '__main__':
+    test()

@@ -224,23 +224,24 @@ def attempt_download(weights):
 def create(name, pretrained, channels, classes):
 
     model = Model(classes, channels)
-    state_dict = torch.load(name, map_location=torch.device('cuda:0'))['model'].float().state_dict()  # to FP32
 
-    dict_load = list(state_dict.items())
-    dict_model = list(model.state_dict().items())
-    new_state_dict = {}
-
-    for i in range(len(dict_model)):
-        if dict_model[i][1].shape == dict_load[i][1].shape:
-            key=dict_model[i][0]
-            value=dict_load[i][1]
-            new_state_dict[key] = value
-        else :
-            key = dict_model[i][0]
-            value = dict_model[i][1]
-            new_state_dict[key] = value
-
-    model.load_state_dict(new_state_dict)
+    # state_dict = torch.load(name, map_location=torch.device('cuda:0'))['model'].float().state_dict()  # to FP32
+    #
+    # dict_load = list(state_dict.items())
+    # dict_model = list(model.state_dict().items())
+    # new_state_dict = {}
+    #
+    # for i in range(len(dict_model)):
+    #     if dict_model[i][1].shape == dict_load[i][1].shape:
+    #         key=dict_model[i][0]
+    #         value=dict_load[i][1]
+    #         new_state_dict[key] = value
+    #     else :
+    #         key = dict_model[i][0]
+    #         value = dict_model[i][1]
+    #         new_state_dict[key] = value
+    #
+    # model.load_state_dict(new_state_dict)
 
     return model
 

@@ -17,80 +17,58 @@ class Loss(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
         self.lambda_class = 1
-        self.lambda_noobj = 5
+        self.lambda_noobj = 10
         self.lambda_obj = 1
-        self.lambda_bbox = 5
+        self.lambda_bbox = 10
 
-    # Coord XY + Coord WH + Coord
-
-    def forward(self,predictions, target, anchors):
-
-        # import matplotlib.pyplot as plt
-        # import numpy as np
-        # plt.matshow(target[0,0,...,2].detach().numpy())
-        # plt.show()
+    def forward(self, predictions, target, anchors):
 
         anchors = anchors.reshape((1, 3, 1, 1, 2))
 
         # predictions
-        pxy = predictions[..., 0:2] #.sigmoid() * 2. - 0.5
-        pwh = predictions[..., 2:4] #.sigmoid() * 2) ** 2 * anchors
-
-        po = predictions[..., 4:5]
-        pc = predictions[..., 5:]
-        pbox = torch.cat((torch.sigmoid(pxy), torch.exp(pwh) * anchors), dim=-1)
+        # pxy = predictions[..., 0:2].sigmoid()
+        # pwh = predictions[..., 2:4].exp() * anchors
+        # po = predictions[..., 4:5]
+        # pc = predictions[..., 5:]
 
         # targets
-        txy = target[..., 0:2]
-        twh = target[..., 2:4] / anchors
-        to = target[..., 4:5]
-        tc = target[..., 5:]
-        tbox = torch.cat((txy, twh), dim=-1).to('cuda:0')
-
-        # for i in torch.flatten(pwh):
-        #     if i > 0 : print(i)
+        # txy = target[..., 0:2]
+        # twh = target[..., 2:4]
+        # to = target[..., 4:5]
+        # tc = target[..., 5:]
 
         obj = target[..., 4] == 1
         noobj = target[..., 4] == 0
 
-        ious = intersection_over_union(pbox[obj], tbox[obj]).detach()
-        # print(ious)
-        # noobj loss:
-        no_object_loss = self.bce(po[noobj], to[noobj])
+        ### noobj loss:
+        no_object_loss = self.bce(predictions[..., 4:5][noobj], target[..., 4:5][noobj])
 
-        # print(torch.sum((pxy[obj] - txy[obj]))**2)
-        # print('txy')
-        # print(txy[obj])
-        # print('pxy')
-        # print(pxy[obj])
-        # if torch.sum(obj) > 0:
+        ### objectness loss:
+        pbox = torch.cat((predictions[..., 0:2].sigmoid(), predictions[..., 2:4].exp() * anchors), dim=-1)
+        ious = intersection_over_union(pbox[obj], target[...,0:4][obj]).detach()
+        object_loss = self.mse(predictions[..., 4:5][obj].sigmoid(), ious * target[..., 4:5][obj])
 
-        # objectness loss:
-        object_loss = self.mse(po[obj], ious * to[obj])
-        # bbox loss
-        box_loss = self.mse(txy[obj], pxy[obj]) #self.mse(pbox[obj], tbox[obj])
-        # class loss
-        class_loss = self.bce(pc[obj], tc[obj])
+        ### bbox loss
+        pxy = predictions[..., 0:2].sigmoid()  # x,y coordinates
+        twh = torch.log(1e-16 + target[..., 2:4] / anchors)
+        box_loss = self.mse(twh[obj], predictions[...,2:4][obj])
+        coordinates_loss = self.mse(target[...,0:2][obj], pxy[obj])
 
-        # else:
-        #     objectness loss:
-        #     object_loss = self.mse(torch.zeros(1), torch.zeros(1))
-        #     bbox loss
-        #     box_loss = self.mse(torch.zeros(1), torch.zeros(1))
-        #     class loss
-        #     class_loss = self.bce(torch.zeros(1), torch.zeros(1))
+        ### class loss
+        class_loss = self.bce(predictions[..., 5:][obj], target[...,5:][obj])
 
-        # print(no_object_loss) #OK
-        # print(object_loss) #OK
-        # print(box_loss)
-        # print(class_loss) #OK
+        print('___________________')
+        print(coordinates_loss)
+        print(no_object_loss)
+        print(object_loss)
+        print(box_loss)
+        print(class_loss)
+        print('\n')
 
-        loss = self.lambda_obj * object_loss + \
+        loss = self.lambda_bbox * (coordinates_loss + box_loss) + \
                self.lambda_noobj * no_object_loss + \
-               self.lambda_class * class_loss + \
-               self.lambda_bbox * box_loss
-
-        #print(loss)
+               self.lambda_obj * object_loss + \
+               self.lambda_class * class_loss
 
         return loss
 
