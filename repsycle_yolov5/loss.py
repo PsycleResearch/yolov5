@@ -48,11 +48,6 @@ class Loss(nn.Module):
             box_loss += self.mse(twh[obj], prediction[...,2:4][obj])
             coordinates_loss += self.mse(target[...,0:2][obj], pxy[obj])
 
-            prediction[..., 0:2] = prediction[..., 0:2].sigmoid()  # x,y coordinates
-            twh = torch.log(1e-16 + target[..., 2:4] / anchor)
-            box_loss += self.mse(twh[obj], prediction[..., 2:4][obj])
-            coordinates_loss += self.mse(target[..., 0:2][obj], pxy[obj])
-
             ### class loss
             class_loss += self.bce(prediction[..., 5:][obj], target[...,5:][obj])
 
