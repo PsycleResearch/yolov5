@@ -1,12 +1,7 @@
 import torch.nn as nn
 import torch
-from utils import intersection_over_union
+from utils import intersection_over_union, box_giou
 from config import device
-
-class BCEWithLogitLoss:
-
-    def __init__(self, input_size, num_classes):
-        super(nn.BCEWithLogitsLoss(), self).__init__()
 
 class Loss(nn.Module):
 
@@ -23,7 +18,6 @@ class Loss(nn.Module):
 
     def forward(self, predictions, targets, anchors):
 
-        loss = 0
         no_object_loss = 0
         object_loss = 0
         box_loss = 0
@@ -45,9 +39,8 @@ class Loss(nn.Module):
 
             ### objectness loss:
             pbox = torch.cat((prediction[..., 0:2].sigmoid(), prediction[..., 2:4].exp() * anchor), dim=-1)
-            ious = intersection_over_union(pbox[obj], target[...,0:4][obj]).detach()
-            object_loss += self.mse(prediction[..., 4:5][obj].sigmoid(), ious * target[..., 4:5][obj])
-            # print(ious * target[..., 4:5][obj].mean())
+            ious = intersection_over_union(pbox[obj], target[...,0:4][obj])
+            object_loss += self.mse(prediction[..., 4:5][obj].sigmoid(), ious.detach() * target[..., 4:5][obj])
 
             ### bbox loss
             pxy = prediction[..., 0:2].sigmoid()  # x,y coordinates
@@ -55,16 +48,21 @@ class Loss(nn.Module):
             box_loss += self.mse(twh[obj], prediction[...,2:4][obj])
             coordinates_loss += self.mse(target[...,0:2][obj], pxy[obj])
 
+            prediction[..., 0:2] = prediction[..., 0:2].sigmoid()  # x,y coordinates
+            twh = torch.log(1e-16 + target[..., 2:4] / anchor)
+            box_loss += self.mse(twh[obj], prediction[..., 2:4][obj])
+            coordinates_loss += self.mse(target[..., 0:2][obj], pxy[obj])
+
             ### class loss
             class_loss += self.bce(prediction[..., 5:][obj], target[...,5:][obj])
 
-            # print('___________________')
-            # print(coordinates_loss)
-            # print(no_object_loss)
-            # print(object_loss)
-            # print(box_loss)
-            # print(class_loss)
-            # print('\n')
+            print('___________________')
+            print(coordinates_loss)
+            print(no_object_loss)
+            print(object_loss)
+            print(box_loss)
+            print(class_loss)
+            print('\n')
 
         loss = self.lambda_bbox * (coordinates_loss + box_loss) + \
                self.lambda_noobj * no_object_loss + \

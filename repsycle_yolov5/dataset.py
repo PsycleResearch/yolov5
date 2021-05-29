@@ -19,8 +19,8 @@ class YoloDataset(Dataset):
             self.datas = json.load(f)
 
         self.img_size = image_size
-        self.image_id = list(self.datas.keys())[:100]
-        self.annotations = list(self.datas.values())[:100]
+        self.image_id = list(self.datas.keys())[:12]
+        self.annotations = list(self.datas.values())[:12]
 
         self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]

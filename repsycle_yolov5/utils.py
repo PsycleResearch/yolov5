@@ -145,6 +145,25 @@ def iou_width_height(boxes1, boxes2):
     )
     return intersection / union
 
+def box_giou(box1, box2):  # box format: (cx, cy, w, h)
+    cx1, cy1, w1, h1 = box1.T
+    cx2, cy2, w2, h2 = box2.T
+
+    b1_x1, b1_x2 = cx1 - w1 / 2, cx1 + w1 / 2
+    b1_y1, b1_y2 = cy1 - h1 / 2, cy1 + h1 / 2
+    b2_x1, b2_x2 = cx2 - w2 / 2, cx2 + w2 / 2
+    b2_y1, b2_y2 = cy2 - h2 / 2, cy2 + h2 / 2
+
+    ws = torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)
+    hs = torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)
+    inter = ws.clamp(min=0) * hs.clamp(min=0)
+    union = w1 * h1 + w2 * h2 - inter
+    iou = inter / union
+
+    cw = torch.max(b1_x2, b2_x2) - torch.min(b1_x1, b2_x1)
+    ch = torch.max(b1_y2, b2_y2) - torch.min(b1_y1, b2_y1)
+    c_area = cw * ch
+    return iou - (c_area - union) / c_area
 
 def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
     """

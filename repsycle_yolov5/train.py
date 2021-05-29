@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import torch
-from model import Model, create
+from model import Model
 from dataset import YoloDataset
 from loss import Loss
 from torch.utils.data import DataLoader
@@ -46,12 +46,12 @@ def train(model, epochs):
             scaler.step(optimizer)
             scaler.update()
 
-        print(f'\nepochs : {e} / {epochs} | loss : {sum(losses) / len(losses)}')
+        print('###')
+        print(f'epochs : {e} / {epochs} | loss : {sum(losses) / len(losses)}')
 
 if __name__ == '__main__':
 
-    model = create('yolov5s.pt', pretrained=True, channels=3, classes=config.nb_classes)
-
-    epochs = 20
+    model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
+    epochs = 1000
     train(model, epochs)
     torch.save(model.state_dict(), 'test.pt')

@@ -30,7 +30,6 @@ def test(model):
 
     scaled_anchors = torch.tensor(config.anchors).to(config.device) * torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2).to(config.device)
 
-    dataset = YoloDataset(img_dir, labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
     model.eval()
     model.to(config.device)
 
@@ -57,7 +56,7 @@ def test(model):
                 for j in range(y_[p].shape[-2]):
                     for s in range(3):
                         objectness = torch.sigmoid(y_[p][0,s,i,j,4]).data.tolist()
-                        if objectness > 0.4:
+                        if objectness > 0.1:
                             x = ( ( j + y_[p][0,s,i,j,0].sigmoid().detach() ) / y_[p].shape[-2] ).data.tolist()
                             y = ( ( i + y_[p][0,s,i,j,1].sigmoid().detach() ) / y_[p].shape[-2] ).data.tolist()
                             w = ( (y_[p][0,s,i,j,2].exp().detach()) * scaled_anchors[p][s][0] / y_[p].shape[-2] ).data.tolist()
