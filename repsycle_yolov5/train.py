@@ -14,7 +14,9 @@ from utils import preprocessing
 
 def train(model, epochs):
 
-    scaled_anchors = torch.tensor(config.anchors) * torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
+    scaled_anchors = torch.tensor(config.anchors) * \
+                     torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
+
     model = model.to(config.device)
     model.train()
 

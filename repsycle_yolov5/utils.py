@@ -228,8 +228,9 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
 
     assert type(bboxes) == list
 
-    bboxes = [box for box in bboxes if box[1] > threshold]
-    bboxes = sorted(bboxes, key=lambda x: x[1], reverse=True)
+    bboxes = [box for box in bboxes if box[4] > threshold]
+    print(bboxes)
+    bboxes = sorted(bboxes, key=lambda x: x[4], reverse=True)
     bboxes_after_nms = []
 
     while bboxes:
