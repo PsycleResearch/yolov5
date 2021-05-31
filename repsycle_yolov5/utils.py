@@ -213,17 +213,21 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
 def pred2bboxes(y,threshold, scaled_anchors):
     predictions = []
     for p in range(3):
+
         objectness = torch.sigmoid(y[p][..., 4])
         S = 1 / y[p].shape[-2]
         masked_objectness = objectness > threshold
-        _, d, cell_i, cell_j = torch.nonzero(masked_objectness, as_tuple=True)
-        px = ((cell_j + y[p][..., 0][masked_objectness].sigmoid().detach()) * S)
-        py = ((cell_i + y[p][..., 1][masked_objectness].sigmoid().detach()) * S)
-        pw = ((y[p][..., 2][masked_objectness].exp().detach()) * scaled_anchors[p, d, 0] * S)
-        ph = ((y[p][..., 3][masked_objectness].exp().detach()) * scaled_anchors[p, d, 1] * S)
-        o = objectness[masked_objectness].detach()
-        c = (torch.argmax(y[p][..., 5:][masked_objectness]).unsqueeze(dim=-1).detach())
-        predictions.append(torch.cat((px, py, pw, ph, o, c)).data.tolist())
+
+        if True in masked_objectness:
+            _, d, cell_i, cell_j = torch.nonzero(masked_objectness, as_tuple=True)
+            px = ((cell_j + y[p][..., 0][masked_objectness].sigmoid().detach()) * S)
+            py = ((cell_i + y[p][..., 1][masked_objectness].sigmoid().detach()) * S)
+            pw = ((y[p][..., 2][masked_objectness].exp().detach()) * scaled_anchors[p, d, 0] * S)
+            ph = ((y[p][..., 3][masked_objectness].exp().detach()) * scaled_anchors[p, d, 1] * S)
+            o = objectness[masked_objectness].detach()
+            c = (torch.argmax(y[p][..., 5:][masked_objectness]).unsqueeze(dim=-1).detach())
+            predictions.append(torch.cat((px, py, pw, ph, o, c)).data.tolist())
+
     return predictions
 
 def non_max_suppression(bboxes, iou_threshold, threshold, box_format="midpoint"):

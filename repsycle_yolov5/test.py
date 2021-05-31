@@ -25,8 +25,8 @@ def test(model):
         datas = json.load(f)
 
     #img_size = image_size
-    image_id = list(datas.keys())[:200]
-    annotations = list(datas.values())[:200]
+    image_id = list(datas.keys())[200:250]
+    annotations = list(datas.values())[200:250]
 
     scaled_anchors = torch.tensor(config.anchors).to(config.device) * \
                      torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2).to(config.device)
@@ -49,9 +49,8 @@ def test(model):
         img = img.to(config.device).float()
 
         predictions = model(img)
-        predictions = pred2bboxes(predictions, threshold=0.6, scaled_anchors=scaled_anchors)
+        predictions = pred2bboxes(predictions, threshold=0.9, scaled_anchors=scaled_anchors)
         predictions = non_max_suppression(predictions, iou_threshold=0.6, threshold=None)
-        print(predictions)
         plot_images(image, predictions)
 
         # for p in range(3):
