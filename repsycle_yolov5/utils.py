@@ -210,8 +210,23 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
 
     return intersection / (box1_area + box2_area - intersection + 1e-6)
 
+def pred2bboxes(y,threshold, scaled_anchors):
+    predictions = []
+    for p in range(3):
+        objectness = torch.sigmoid(y[p][..., 4])
+        S = 1 / y[p].shape[-2]
+        masked_objectness = objectness > threshold
+        _, d, cell_i, cell_j = torch.nonzero(masked_objectness, as_tuple=True)
+        px = ((cell_j + y[p][..., 0][masked_objectness].sigmoid().detach()) * S)
+        py = ((cell_i + y[p][..., 1][masked_objectness].sigmoid().detach()) * S)
+        pw = ((y[p][..., 2][masked_objectness].exp().detach()) * scaled_anchors[p, d, 0] * S)
+        ph = ((y[p][..., 3][masked_objectness].exp().detach()) * scaled_anchors[p, d, 1] * S)
+        o = objectness[masked_objectness].detach()
+        c = (torch.argmax(y[p][..., 5:][masked_objectness]).unsqueeze(dim=-1).detach())
+        predictions.append(torch.cat((px, py, pw, ph, o, c)).data.tolist())
+    return predictions
 
-def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
+def non_max_suppression(bboxes, iou_threshold, threshold, box_format="midpoint"):
     """
     Video explanation of this function:
     https://youtu.be/YDkjWEN8jNA
@@ -228,21 +243,21 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
 
     assert type(bboxes) == list
 
-    bboxes = [box for box in bboxes if box[4] > threshold]
-    print(bboxes)
+    if threshold is not None:
+        bboxes = [box for box in bboxes if box[4] > threshold]
     bboxes = sorted(bboxes, key=lambda x: x[4], reverse=True)
     bboxes_after_nms = []
 
     while bboxes:
-        chosen_box = bboxes.pop(0)
 
+        chosen_box = bboxes.pop(0)
         bboxes = [
             box
             for box in bboxes
-            if box[0] != chosen_box[0]
+            if box[5] != chosen_box[5]
             or intersection_over_union(
-                torch.tensor(chosen_box[2:]),
-                torch.tensor(box[2:]),
+                torch.tensor(chosen_box[0:4]),
+                torch.tensor(box[0:4]),
                 box_format=box_format,
             )
             < iou_threshold

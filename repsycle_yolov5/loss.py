@@ -51,20 +51,24 @@ class Loss(nn.Module):
             ### class loss
             class_loss += self.bce(prediction[..., 5:][obj], target[...,5:][obj])
 
-            print('___________________')
-            print(coordinates_loss)
-            print(no_object_loss)
-            print(object_loss)
-            print(box_loss)
-            print(class_loss)
-            print('\n')
+            # print('___________________')
+            # print(coordinates_loss)
+            # print(no_object_loss)
+            # print(object_loss)
+            # print(box_loss)
+            # print(class_loss)
+            # print('\n')
 
         loss = self.lambda_bbox * (coordinates_loss + box_loss) + \
                self.lambda_noobj * no_object_loss + \
                self.lambda_obj * object_loss + \
                self.lambda_class * class_loss
 
-        return loss
+        return (loss,
+                self.lambda_bbox * (coordinates_loss + box_loss),
+                self.lambda_noobj * no_object_loss,
+                self.lambda_obj * object_loss,
+                self.lambda_class * class_loss)
 
     def forward_(self, predictions, target, anchors):
 

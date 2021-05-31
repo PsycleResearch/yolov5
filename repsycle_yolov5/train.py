@@ -32,6 +32,10 @@ def train(model, epochs):
     for e in range(epochs):
 
         losses = []
+        bbox_losses = []
+        noobj_losses = []
+        obj_losses = []
+        class_losses = []
 
         # for step in ['train', 'val']:
 
@@ -40,16 +44,25 @@ def train(model, epochs):
             x = model(img)
 
             with torch.cuda.amp.autocast():
-                loss = compute_loss.forward(x, target, scaled_anchors)
+                loss, bbox_loss, noobj_loss, obj_loss, class_loss = compute_loss.forward(x, target, scaled_anchors)
 
             losses.append(loss)
+            bbox_losses.append(bbox_loss)
+            noobj_losses.append(noobj_loss)
+            obj_losses.append(obj_loss)
+            class_losses.append(class_loss)
+
             optimizer.zero_grad()
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
 
         print('###')
-        print(f'epochs : {e} / {epochs} | loss : {sum(losses) / len(losses)}')
+        print(f'epochs : {e + 1} / {epochs} | loss : {sum(losses) / len(losses)} '
+              f'| bbox_loss : {sum(bbox_losses) / len(bbox_losses)} '
+              f'| noobj_losses : {sum(noobj_losses) / len(noobj_losses)} '
+              f'| obj_losses : {sum(obj_losses) / len(obj_losses)} '
+              f'| class_losses : {sum(class_losses) / len(class_losses)}')
 
 if __name__ == '__main__':
 
