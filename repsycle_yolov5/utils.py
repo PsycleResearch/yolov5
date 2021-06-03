@@ -75,8 +75,8 @@ def plot_images(image, bboxes):
     plt.imshow(image)
     plt.show()
 
-def cell_to_coordinates(image, targets):
-    H, W, _ = image.shape
+def cell_to_coordinates(targets):
+
     bboxes = []
 
     for target in targets:
@@ -92,7 +92,7 @@ def cell_to_coordinates(image, targets):
                         w = target[s, i, j, 2:3].data.tolist()[0] / c_w
                         h = target[s, i, j, 3:4].data.tolist()[0] / c_h
                         c = torch.argmax(target[s, i, j, 5:]).data.tolist()
-                        bboxes.append((x, y, w, h, c))
+                        bboxes.append([x, y, w, h, c])
 
     return bboxes
 
@@ -297,6 +297,7 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
         max_iou = 0
         max_idx = 0
 
+        used_true_boxes = []
         filtered_true_boxes = [boxes for boxes in flatten_true_boxes if int(boxes[5]) == c]
         filtered_pred_boxes = [boxes for boxes in flatten_pred_boxes if int(boxes[6]) == c]
 
@@ -304,9 +305,12 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
 
         for sorted_pred_boxe in sorted_pred_boxes:
 
-            tmp_true_boxes = [boxe for boxe in filtered_true_boxes if boxe[0] == sorted_pred_boxe[0]]
+            current_true_boxes = [boxe for boxe in filtered_true_boxes if boxe[0] == sorted_pred_boxe[0]]
 
-            for i, true_boxe in enumerate(tmp_true_boxes):
+            if len(current_true_boxes) == 0:
+                continue
+
+            for i, true_boxe in enumerate(current_true_boxes):
 
                 current_iou = intersection_over_union(torch.tensor(sorted_pred_boxe), torch.tensor(true_boxe))
 
@@ -314,8 +318,10 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
                     max_iou = current_iou
                     max_idx = i
 
-            if max_iou > iou_threshold and tmp_true_boxes[max_idx][5] == sorted_pred_boxe[6]:
+            if max_iou > iou_threshold and current_true_boxes[max_idx][5] == sorted_pred_boxe[6] \
+                    and current_true_boxes[max_idx] not in used_true_boxes:
                 nb_tp += 1
+                used_true_boxes.append(current_true_boxes[max_idx])
             else:
                 nb_fp += 1
 

@@ -9,22 +9,25 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 import config
 from tqdm import tqdm
-from utils import preprocessing
-
+from utils import pred2bboxes, non_max_suppression, mean_average_precision, cell_to_coordinates
 
 def train(model, epochs):
 
     scaled_anchors = torch.tensor(config.anchors) * \
                      torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
+    scaled_anchors = scaled_anchors.to(config.device)
 
     model = model.to(config.device)
     model.train()
 
     img_dir = './images/'
-    labels = './datas/temp.json'
+    training_labels = './datas/training_set.json'
+    validation_labels = './datas/validation_set.json'
 
-    dataset = YoloDataset(img_dir, labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
-    loader = DataLoader(dataset, batch_size=6, num_workers=0, shuffle=True)
+    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
+    validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
+
+    loader = DataLoader(training_dataset, batch_size=6, num_workers=0, shuffle=True)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     compute_loss = Loss()
     scaler = torch.cuda.amp.GradScaler()
@@ -36,8 +39,6 @@ def train(model, epochs):
         noobj_losses = []
         obj_losses = []
         class_losses = []
-
-        # for step in ['train', 'val']:
 
         for img, target in tqdm(loader):
 
@@ -63,6 +64,21 @@ def train(model, epochs):
               f'| noobj_losses : {sum(noobj_losses) / len(noobj_losses)} '
               f'| obj_losses : {sum(obj_losses) / len(obj_losses)} '
               f'| class_losses : {sum(class_losses) / len(class_losses)}')
+
+        predictions = {}
+        annotations = {}
+        with torch.no_grad():
+            for i, (img, label) in enumerate(validation_dataset):
+
+                img = img.unsqueeze(dim=0)
+                prediction = model(img)
+                prediction = pred2bboxes(prediction, threshold=0.0, scaled_anchors=scaled_anchors)
+                prediction = non_max_suppression(prediction, iou_threshold=0.6, threshold=None)
+
+                predictions[str(i)] = prediction
+                annotations[str(i)] = list(cell_to_coordinates(label))
+
+        print(f'mAP : {mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)}')
 
 if __name__ == '__main__':
 
