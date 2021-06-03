@@ -55,7 +55,6 @@ def test(model):
         end_time = time.time()
 
         # plot_images(image, prediction)
-
         # average_inference_time.append(end_time - start_time)
 
     # average_inference_time = sum(average_inference_time) / len(average_inference_time)
@@ -72,4 +71,5 @@ if __name__ == '__main__':
 
     model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
     model.load_state_dict(torch.load('./test.pt'))
+    model.eval()
     test(model)
