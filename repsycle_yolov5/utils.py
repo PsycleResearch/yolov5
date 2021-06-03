@@ -285,6 +285,7 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
         for value in pred_values:
             flatten_pred_boxes.append([idx]+value)
         for value in true_values:
+
             flatten_true_boxes.append([idx]+value)
 
     for c in range(num_classes):

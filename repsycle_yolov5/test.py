@@ -11,7 +11,8 @@ import config
 from processing import letterbox
 import cv2
 import json
-from utils import plot_images, non_max_suppression, pred2bboxes, mean_average_precision
+from utils import plot_images, non_max_suppression, pred2bboxes, mean_average_precision, cell_to_coordinates
+from dataset import YoloDataset
 import time
 
 def rescale_prediction():
@@ -20,14 +21,12 @@ def rescale_prediction():
 def test(model):
 
     img_dir = './images/'
-    labels = './datas/temp.json'
+    training_labels = './datas/training_set.json'
 
-    with open(labels, 'r') as f:
-        datas = json.load(f)
+    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
 
-    image_id = list(datas.keys())[0:200]
-    annotations = list(datas.values())[0:200]
-    predictions = {}
+    # image_id = list(datas.keys())[0:200]
+    # annotations = list(datas.values())[0:200]
 
     scaled_anchors = torch.tensor(config.anchors).to(config.device) * \
                      torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2).to(config.device)
@@ -37,37 +36,34 @@ def test(model):
     model.eval()
     model.to(config.device)
 
-    for idx in range(len(image_id)):
+    annotations = {}
+    predictions = {}
+
+    for idx, (img, label) in enumerate(training_dataset):
 
         start_time = time.time()
 
-        img = cv2.imread(f'./images/{image_id[idx]}.jpeg')
-        image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = cv2.resize(image, (640, 640))
-
-        img = img / 255.
-        img = img.reshape((1,3,640,640))
-        img = torch.tensor(img)
-        img = img.to(config.device).float()
-
+        img = img.unsqueeze(dim = 0)
         prediction = model(img)
+
         prediction = pred2bboxes(prediction, threshold=0.6, scaled_anchors=scaled_anchors)
         prediction = non_max_suppression(prediction, iou_threshold=0.6, threshold=None)
+
+        annotations[str(idx)] = [list(cell_to_coordinates(label)[0])]
+        predictions[str(idx)] = prediction
 
         end_time = time.time()
 
         # plot_images(image, prediction)
 
-        average_inference_time.append(end_time - start_time)
+        # average_inference_time.append(end_time - start_time)
 
-        predictions[image_id[idx]] = prediction
-
-    average_inference_time = sum(average_inference_time) / len(average_inference_time)
-
+    # average_inference_time = sum(average_inference_time) / len(average_inference_time)
     # print(annotations)
     # print(ordered_annotations)
 
-    map = mean_average_precision(predictions, datas, iou_threshold=0.5, box_format="midpoint", num_classes=1)
+    map = mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)
+    print(map)
 
     # print(f'* Average inference time : {average_inference_time} '
     #       f'\n* Average number of inferences per seconde : {1 / average_inference_time}')

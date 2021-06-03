@@ -67,18 +67,21 @@ def train(model, epochs):
 
         predictions = {}
         annotations = {}
+
         with torch.no_grad():
             for i, (img, label) in enumerate(validation_dataset):
 
                 img = img.unsqueeze(dim=0)
                 prediction = model(img)
-                prediction = pred2bboxes(prediction, threshold=0.0, scaled_anchors=scaled_anchors)
+                prediction = pred2bboxes(prediction, threshold=0.5, scaled_anchors=scaled_anchors)
                 prediction = non_max_suppression(prediction, iou_threshold=0.6, threshold=None)
 
                 predictions[str(i)] = prediction
-                annotations[str(i)] = list(cell_to_coordinates(label))
+                annotations[str(i)] = [list(cell_to_coordinates(label)[0])]
 
-        print(f'mAP : {mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)}')
+        print(annotations)
+
+        # print(f'mAP : {mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)}')
 
 if __name__ == '__main__':
 
