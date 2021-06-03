@@ -27,7 +27,7 @@ def train(model, epochs):
     training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
     validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
 
-    loader = DataLoader(training_dataset, batch_size=6, num_workers=0, shuffle=True)
+    loader = DataLoader(training_dataset, batch_size=16, num_workers=0, shuffle=True)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     compute_loss = Loss()
     scaler = torch.cuda.amp.GradScaler()
@@ -39,6 +39,8 @@ def train(model, epochs):
         noobj_losses = []
         obj_losses = []
         class_losses = []
+
+        model.train()
 
         for img, target in tqdm(loader):
 
@@ -68,20 +70,22 @@ def train(model, epochs):
         predictions = {}
         annotations = {}
 
-        with torch.no_grad():
-            for i, (img, label) in enumerate(validation_dataset):
+        model.eval()
 
-                img = img.unsqueeze(dim=0)
+        for i, (img, label) in enumerate(validation_dataset):
+
+            img = img.unsqueeze(dim=0)
+
+            with torch.no_grad():
                 prediction = model(img)
-                prediction = pred2bboxes(prediction, threshold=0.5, scaled_anchors=scaled_anchors)
-                prediction = non_max_suppression(prediction, iou_threshold=0.6, threshold=None)
 
-                predictions[str(i)] = prediction
-                annotations[str(i)] = [list(cell_to_coordinates(label)[0])]
+            prediction = pred2bboxes(prediction, threshold=0.5, scaled_anchors=scaled_anchors)
+            prediction = non_max_suppression(prediction, iou_threshold=0.6, threshold=None)
 
-        print(annotations)
+            predictions[str(i)] = prediction
+            annotations[str(i)] = [list(cell_to_coordinates(label)[0])]
 
-        # print(f'mAP : {mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)}')
+        print(f'mAP : {mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)}')
 
 if __name__ == '__main__':
 
