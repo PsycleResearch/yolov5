@@ -210,8 +210,10 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
 
     return intersection / (box1_area + box2_area - intersection + 1e-6)
 
-def pred2bboxes(y,threshold, scaled_anchors):
+def pred2bboxes(y, threshold, scaled_anchors):
+
     predictions = []
+
     for p in range(3):
 
         objectness = torch.sigmoid(y[p][..., 4])
@@ -220,12 +222,12 @@ def pred2bboxes(y,threshold, scaled_anchors):
 
         if True in masked_objectness:
             _, d, cell_i, cell_j = torch.nonzero(masked_objectness, as_tuple=True)
-            px = ((cell_j + y[p][..., 0][masked_objectness].sigmoid().detach()) * S)
-            py = ((cell_i + y[p][..., 1][masked_objectness].sigmoid().detach()) * S)
-            pw = ((y[p][..., 2][masked_objectness].exp().detach()) * scaled_anchors[p, d, 0] * S)
-            ph = ((y[p][..., 3][masked_objectness].exp().detach()) * scaled_anchors[p, d, 1] * S)
-            o = objectness[masked_objectness].detach()
-            c = (torch.argmax(y[p][..., 5:][masked_objectness]).unsqueeze(dim=-1).detach())
+            px = ((cell_j + y[p][..., 0][masked_objectness].sigmoid()) * S)
+            py = ((cell_i + y[p][..., 1][masked_objectness].sigmoid()) * S)
+            pw = ((y[p][..., 2][masked_objectness].exp()) * scaled_anchors[p, d, 0] * S)
+            ph = ((y[p][..., 3][masked_objectness].exp()) * scaled_anchors[p, d, 1] * S)
+            o = objectness[masked_objectness]
+            c = (torch.argmax(y[p][..., 5:][masked_objectness]).unsqueeze(dim=-1))
             predictions.append(torch.cat((px, py, pw, ph, o, c)).data.tolist())
 
     return predictions
@@ -249,6 +251,7 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format="midpoint")
 
     if threshold is not None:
         bboxes = [box for box in bboxes if box[4] > threshold]
+
     bboxes = sorted(bboxes, key=lambda x: x[4], reverse=True)
     bboxes_after_nms = []
 
@@ -271,8 +274,60 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format="midpoint")
 
     return bboxes_after_nms
 
+def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format="midpoint", num_classes=20):
 
-def mean_average_precision(
+    average_precision = []
+
+    flatten_pred_boxes = []
+    flatten_true_boxes = []
+    for idx, (key, pred_values) in enumerate(pred_boxes.items()):
+        true_values = true_boxes[key]
+        for value in pred_values:
+            flatten_pred_boxes.append([idx]+value)
+        for value in true_values:
+            flatten_true_boxes.append([idx]+value)
+
+    for c in range(num_classes):
+
+        nb_tp = 0
+        nb_fp = 0
+        precision = []
+        recall = []
+
+        max_iou = 0
+        max_idx = 0
+
+        filtered_true_boxes = [boxes for boxes in flatten_true_boxes if int(boxes[5]) == c]
+        filtered_pred_boxes = [boxes for boxes in flatten_pred_boxes if int(boxes[6]) == c]
+
+        sorted_pred_boxes = sorted(filtered_pred_boxes, key=lambda x: x[5], reverse=True)
+
+        for sorted_pred_boxe in sorted_pred_boxes:
+
+            tmp_true_boxes = [boxe for boxe in filtered_true_boxes if boxe[0] == sorted_pred_boxe[0]]
+
+            for i, true_boxe in enumerate(tmp_true_boxes):
+
+                current_iou = intersection_over_union(torch.tensor(sorted_pred_boxe), torch.tensor(true_boxe))
+
+                if current_iou > max_iou:
+                    max_iou = current_iou
+                    max_idx = i
+
+            if max_iou > iou_threshold and tmp_true_boxes[max_idx][5] == sorted_pred_boxe[6]:
+                nb_tp += 1
+            else:
+                nb_fp += 1
+
+            precision.append(nb_tp / (nb_tp + nb_fp))
+            recall.append(nb_tp / len(filtered_true_boxes))
+
+        average_precision.append(np.trapz(precision, recall))
+
+    return sum(average_precision) / len(average_precision)
+
+
+def mean_average_precision_(
     pred_boxes, true_boxes, iou_threshold=0.5, box_format="midpoint", num_classes=20
 ):
     """
