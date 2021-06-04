@@ -24,11 +24,14 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format="corners"):
     Returns:
         list: bboxes after performing NMS given a specific IoU threshold
     """
-    print(bboxes)
+    # print(bboxes)
 
     assert type(bboxes) == list
 
-    bboxes = [box for box in bboxes if box[4] > threshold]
+    # bboxes = [box for box in bboxes if box[4] > threshold
+
+    pred2bboxes()
+
     bboxes = sorted(bboxes, key=lambda x: x[4], reverse=True)
     bboxes_after_nms = []
 
@@ -62,7 +65,6 @@ def preprocessing(images):
     return images
 
 def plot_images(image, bboxes):
-
     #image = image * 255.
     H, W, _ = image.shape
     for bboxe in bboxes:
@@ -210,18 +212,20 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
 
     return intersection / (box1_area + box2_area - intersection + 1e-6)
 
-def pred2bboxes(y, threshold, scaled_anchors):
+def pred2bboxes_(y, threshold, scaled_anchors):
 
     predictions = []
 
     for p in range(3):
 
         objectness = torch.sigmoid(y[p][..., 4])
-        S = 1 / y[p].shape[-2]
         masked_objectness = objectness > threshold
+        S = 1 / y[p].shape[-2]
 
         if True in masked_objectness:
+
             _, d, cell_i, cell_j = torch.nonzero(masked_objectness, as_tuple=True)
+
             px = ((cell_j + y[p][..., 0][masked_objectness].sigmoid()) * S)
             py = ((cell_i + y[p][..., 1][masked_objectness].sigmoid()) * S)
             pw = ((y[p][..., 2][masked_objectness].exp()) * scaled_anchors[p, d, 0] * S)
@@ -232,26 +236,71 @@ def pred2bboxes(y, threshold, scaled_anchors):
 
     return predictions
 
-def non_max_suppression(bboxes, iou_threshold, threshold, box_format="midpoint"):
-    """
-    Video explanation of this function:
-    https://youtu.be/YDkjWEN8jNA
-    Does Non Max Suppression given bboxes
-    Parameters:
-        bboxes (list): list of lists containing all bboxes with each bboxes
-        specified as [class_pred, prob_score, x1, y1, x2, y2]
-        iou_threshold (float): threshold where predicted bboxes is correct
-        threshold (float): threshold to remove predicted bboxes (independent of IoU)
-        box_format (str): "midpoint" or "corners" used to specify bboxes
-    Returns:
-        list: bboxes after performing NMS given a specific IoU threshold
-    """
+def pred2bboxes__(y, threshold, scaled_anchors):
 
-    assert type(bboxes) == list
+    predictions = []
 
-    if threshold is not None:
-        bboxes = [box for box in bboxes if box[4] > threshold]
+    for p in range(3):
 
+        objectness = torch.sigmoid(y[p][..., 4])
+        masked_objectness = objectness > threshold
+        S = 1 / y[p].shape[-2]
+
+        if True in masked_objectness:
+
+            _, d, cell_i, cell_j = torch.nonzero(masked_objectness, as_tuple=True)
+
+            px = ((cell_j + y[p][..., 0][masked_objectness].sigmoid()) * S)
+            py = ((cell_i + y[p][..., 1][masked_objectness].sigmoid()) * S)
+            pw = ((y[p][..., 2][masked_objectness].exp()) * scaled_anchors[p, d, 0] * S)
+            ph = ((y[p][..., 3][masked_objectness].exp()) * scaled_anchors[p, d, 1] * S)
+            o = objectness[masked_objectness]
+            c = torch.argmax(y[p][..., 5:][masked_objectness], axis=-1)
+            predictions.append(torch.stack((px, py, pw, ph, o, c)).T.tolist())
+
+    flatten_pred = []
+    for pred_t in predictions:
+        for pred in pred_t:
+            flatten_pred.append(pred)
+
+    return flatten_pred
+
+def target2bboxes(target, threshold, scaled_anchors):
+
+    S = 1 / target.shape[-2]
+    cell_i = torch.cumsum(torch.ones(target.shape[:-1]), axis=-2).to(device) - 1
+    cell_j = torch.cumsum(torch.ones(target.shape[:-1]), axis=-1).to(device) - 1
+    px = (cell_i + target[..., 0].sigmoid()) * S
+    py = (cell_j + target[..., 1].sigmoid()) * S
+    pw = target[..., 2].exp() * scaled_anchors[:, 0].reshape(3,1,1) * S
+    ph = target[..., 3].exp() * scaled_anchors[:, 1].reshape(3,1,1) * S
+    objectness = torch.sigmoid(target[..., 4])
+    best_class = torch.argmax(target[..., 5:], axis=-1)
+    bboxes = torch.stack((px, py, pw, ph, objectness, best_class), dim=-1)
+    return bboxes.reshape((4, target.shape[1] * target.shape[2] * target.shape[2], 6)).tolist()
+
+def pred2bboxes(y, scaled_anchors):
+
+    predictions = []
+
+    for p in range(3):
+
+        S = 1 / y[p].shape[-2]
+        cell_i = torch.cumsum(torch.ones(y[p].shape[:-1]), axis = 2).to(device)
+        cell_j = torch.cumsum(torch.ones(y[p].shape[:-1]), axis = 3).to(device)
+        px = torch.flatten((cell_j + y[p][..., 0].sigmoid()) * S)
+        py = torch.flatten((cell_i + y[p][..., 1].sigmoid()) * S)
+        pw = torch.flatten(y[p][..., 2].exp() * scaled_anchors[p, :, 0].reshape(3,1,1) * S)
+        ph = torch.flatten(y[p][..., 3].exp() * scaled_anchors[p, :, 1].reshape(3,1,1) * S)
+        objectness = torch.flatten(torch.flatten(torch.sigmoid(y[p][..., 4])))
+        c = torch.flatten(torch.argmax(y[p][..., 5:].sigmoid(), axis=-1))
+        predictions = predictions + torch.stack((px, py, pw, ph, objectness, c)).T.squeeze(dim=0).tolist()
+
+    return predictions
+
+def non_max_suppression(target, scaled_anchors, iou_threshold, threshold, box_format="midpoint"):
+
+    bboxes = pred2bboxes__(target, threshold, scaled_anchors)
     bboxes = sorted(bboxes, key=lambda x: x[4], reverse=True)
     bboxes_after_nms = []
 
@@ -280,6 +329,7 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
 
     flatten_pred_boxes = []
     flatten_true_boxes = []
+
     for idx, (key, pred_values) in enumerate(pred_boxes.items()):
         true_values = true_boxes[key]
         for value in pred_values:

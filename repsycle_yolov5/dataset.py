@@ -19,8 +19,8 @@ class YoloDataset(Dataset):
             self.datas = json.load(f)
 
         self.img_size = image_size
-        self.image_id = list(self.datas.keys())[:10]
-        self.annotations = list(self.datas.values())[:10]
+        self.image_id = list(self.datas.keys())[:400]
+        self.annotations = list(self.datas.values())[:400]
 
         self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
@@ -46,7 +46,7 @@ class YoloDataset(Dataset):
         image = image.reshape((3, image.shape[0], image.shape[1]))
         image = torch.tensor(image).float().to(config.device)
 
-        targets = [torch.zeros(self.nb_anchors // 3, S, S, 5 + self.C) for S in self.S] #[prob, x, y, w, h, c]
+        targets = [torch.zeros(self.nb_anchors // 3, S, S, 5 + self.C) for S in self.S]
 
         # Choose which anchors is responsible for each cells following highest IOU
         for bboxe in bboxes:
@@ -101,7 +101,7 @@ class YoloDataset(Dataset):
 
         #print(targets[0][1,...,5:].shape)
 
-        return image, tuple(targets)
+        return image, tuple(targets), bboxes
 
 def test():
 

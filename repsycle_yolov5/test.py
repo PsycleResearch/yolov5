@@ -11,11 +11,15 @@ import config
 from processing import letterbox
 import cv2
 import json
-from utils import plot_images, non_max_suppression, pred2bboxes, mean_average_precision, cell_to_coordinates
+from utils import plot_images, non_max_suppression, pred2bboxes__, mean_average_precision, cell_to_coordinates
 from dataset import YoloDataset
 import time
 
 def rescale_prediction():
+    return
+
+def evaluate_model(model, scaled_anchors, image_dir, labels_path):
+
     return
 
 def test(model):
@@ -24,9 +28,6 @@ def test(model):
     training_labels = './datas/training_set.json'
 
     training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
-
-    # image_id = list(datas.keys())[0:200]
-    # annotations = list(datas.values())[0:200]
 
     scaled_anchors = torch.tensor(config.anchors).to(config.device) * \
                      torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2).to(config.device)
@@ -39,37 +40,33 @@ def test(model):
     annotations = {}
     predictions = {}
 
-    for idx, (img, label) in enumerate(training_dataset):
+    for idx, (img, label, bboxes) in enumerate(training_dataset):
 
         start_time = time.time()
-
-        img = img.unsqueeze(dim = 0)
+        img = img.unsqueeze(0)
         prediction = model(img)
+        prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.5, threshold=0.6)
 
-        prediction = pred2bboxes(prediction, threshold=0.6, scaled_anchors=scaled_anchors)
-        prediction = non_max_suppression(prediction, iou_threshold=0.6, threshold=None)
-
-        annotations[str(idx)] = [list(cell_to_coordinates(label)[0])]
+        annotations[str(idx)] = bboxes
         predictions[str(idx)] = prediction
 
         end_time = time.time()
 
-        # plot_images(image, prediction)
-        # average_inference_time.append(end_time - start_time)
+        # plot_images(np.asarray(img.to('cpu')).reshape((640, 640, 3)), prediction)
+        average_inference_time.append(end_time - start_time)
 
-    # average_inference_time = sum(average_inference_time) / len(average_inference_time)
-    # print(annotations)
-    # print(ordered_annotations)
-
-    map = mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)
-    print(map)
-
-    # print(f'* Average inference time : {average_inference_time} '
-    #       f'\n* Average number of inferences per seconde : {1 / average_inference_time}')
+    average_inference_time = sum(average_inference_time) / len(average_inference_time)
+    start_time = time.time()
+    mAP = mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)
+    end_time = time.time()
+    print(end_time - start_time)
+    print(f'* mAP@0.5 : {mAP}'
+          f'\n* Average inference time : {average_inference_time} '
+          f'\n* Average number of inferences per seconde : {1 / average_inference_time}')
 
 if __name__ == '__main__':
 
     model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
-    model.load_state_dict(torch.load('./test.pt'))
+    # model.load_state_dict(torch.load('./test.pt'))
     model.eval()
     test(model)

@@ -43,7 +43,7 @@ def train(model, epochs):
 
         model.train()
 
-        for img, target in tqdm(loader):
+        for img, target, bboxe in tqdm(loader):
 
             x = model(img)
 
@@ -73,22 +73,22 @@ def train(model, epochs):
 
         model.eval()
 
-        if e % 10 == 0:
+        if e % 10 == 0 and e != 0:
 
-            for i, (img, label) in enumerate(validation_dataset):
+            for i, (img, label, bboxe) in enumerate(validation_dataset):
 
                 img = img.unsqueeze(dim=0)
 
                 with torch.no_grad():
                     prediction = model(img)
 
-                prediction = pred2bboxes(prediction, threshold=0.5, scaled_anchors=scaled_anchors)
-                prediction = non_max_suppression(prediction, iou_threshold=0.6, threshold=None)
+                # prediction = pred2bboxes(prediction, threshold=0.5, scaled_anchors=scaled_anchors)
+                prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.6, threshold=0.5)
 
                 predictions[str(i)] = prediction
-                annotations[str(i)] = [list(cell_to_coordinates(label)[0])]
+                annotations[str(i)] = bboxe
 
-            print(f'mAP : {mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)}')
+            print(f'mAP : {mean_average_precision(predictions, annotations, iou_threshold=0.6, box_format="midpoint", num_classes=1)}')
 
 if __name__ == '__main__':
 
