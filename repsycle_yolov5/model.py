@@ -125,6 +125,66 @@ class Model(torch.nn.Module):
         x_ = self._build_detect(xs, xm, xl)
         return x_
 
+def attempt_download(weights):
+    # Attempt to download pretrained weights if not found locally
+    weights = weights.strip().replace("'", '')
+    file = Path(weights).name
+    msg = weights + ' missing, try downloading from https://github.com/ultralytics/yolov5/releases/'
+    models = ['yolov5s.pt', 'yolov5m.pt', 'yolov5l.pt', 'yolov5x.pt']  # available models
+    if file in models and not os.path.isfile(weights):
+        print(file)
+        # Google Drive
+        # d = {'yolov5s.pt': '1R5T6rIyy3lLwgFXNms8whc-387H0tMQO',
+        #      'yolov5m.pt': '1vobuEExpWQVpXExsJ2w-Mbf3HJjWkQJr',
+        #      'yolov5l.pt': '1hrlqD1Wdei7UT4OgT785BEk1JwnSvNEV',
+        #      'yolov5x.pt': '1mM8aZJlWTxOg7BZJvNUMrTnA2AbeCVzS'}
+        # r = gdrive_download(id=d[file], name=weights) if file in d else 1
+        # if r == 0 and os.path.exists(weights) and os.path.getsize(weights) > 1E6:  # check
+        #    return
+
+        try:  # GitHub
+            url = 'https://github.com/ultralytics/yolov5/releases/download/v3.0/' + file
+            print('Downloading %s to %s...' % (url, weights))
+            if platform.system() == 'Darwin':  # avoid MacOS python requests certificate error
+                r = os.system('curl -L %s -o %s' % (url, weights))
+            else:
+                torch.hub.download_url_to_file(url, weights)
+            assert os.path.exists(weights) and os.path.getsize(weights) > 1E6  # check
+        except Exception as e:  # GCP
+            print('Download error: %s' % e)
+            url = 'https://storage.googleapis.com/ultralytics/yolov5/ckpt/' + file
+            print('Downloading %s to %s...' % (url, weights))
+            r = os.system('curl -L %s -o %s' % (url, weights))  # torch.hub.download_url_to_file(url, weights)
+        finally:
+            if not (os.path.exists(weights) and os.path.getsize(weights) > 1E6):  # check
+                os.remove(weights) if os.path.exists(weights) else None  # remove partial downloads
+                print('ERROR: Download failure: %s' % msg)
+            print('')
+            return
+
+def create(name, channels, classes, anchors):
+
+    model = Model(nb_classes=classes, nb_channels=channels, anchors=anchors)
+    state_dict = torch.load(name, map_location=torch.device('cuda:0'))['model'].float().state_dict()  # to FP32
+
+    dict_load = list(state_dict.items())
+    dict_model = list(model.state_dict().items())
+    new_state_dict = {}
+
+    for i in range(len(dict_model)):
+        if dict_model[i][1].shape == dict_load[i][1].shape:
+            key=dict_model[i][0]
+            value=dict_load[i][1]
+            new_state_dict[key] = value
+        else :
+            key = dict_model[i][0]
+            value = dict_model[i][1]
+            new_state_dict[key] = value
+
+    model.load_state_dict(new_state_dict)
+
+    return model
+
 if __name__ == '__main__':
 
     model = Model(anchors=config.anchors).to(config.device)

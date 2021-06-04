@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import torch
-from model import Model
+from model import Model, create
 from dataset import YoloDataset
 from loss import Loss
 from torch.utils.data import DataLoader
@@ -24,7 +24,7 @@ def train(model, epochs):
     training_labels = './datas/training_set.json'
     validation_labels = './datas/validation_set.json'
 
-    training_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
+    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
     validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
 
     loader = DataLoader(training_dataset, batch_size=6, num_workers=0, shuffle=True)
@@ -92,7 +92,8 @@ def train(model, epochs):
 
 if __name__ == '__main__':
 
-    model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
+    # model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
+    model = create('yolov5s.pt', channels=3, classes=1, anchors=config.anchors)
     epochs = 1000
     train(model, epochs)
     torch.save(model.state_dict(), 'test.pt')
