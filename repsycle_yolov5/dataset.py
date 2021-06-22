@@ -3,8 +3,7 @@ import os
 import pandas as pd
 from PIL import Image
 import config
-from utils import (iou_width_height as iou,
-                   non_max_suppression as nms)
+from utils import iou_width_height as iou
 import torch
 from torch.utils.data import Dataset, DataLoader
 import json
@@ -19,10 +18,10 @@ class YoloDataset(Dataset):
             self.datas = json.load(f)
 
         self.img_size = image_size
-        self.image_id = list(self.datas.keys())[:400]
-        self.annotations = list(self.datas.values())[:400]
-
-        self.anchors = torch.tensor(anchors[0] + anchors[1] + anchors[2])
+        self.image_id = list(self.datas.keys())
+        self.annotations = list(self.datas.values())
+        # torch.tensor(anchors).reshape((9,2)).float()
+        self.anchors =  torch.tensor(anchors[0] + anchors[1] + anchors[2]) #
         self.nb_anchors = self.anchors.shape[0]
         self.C = C
         self.S = S

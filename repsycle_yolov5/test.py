@@ -45,7 +45,7 @@ def test(model):
         start_time = time.time()
         img = img.unsqueeze(0)
         prediction = model(img)
-        prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.5, threshold=0.6)
+        prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.2, threshold=0.5)
 
         annotations[str(idx)] = bboxes
         predictions[str(idx)] = prediction
@@ -57,7 +57,7 @@ def test(model):
 
     average_inference_time = sum(average_inference_time) / len(average_inference_time)
     start_time = time.time()
-    mAP = mean_average_precision(predictions, annotations, iou_threshold=0.5, box_format="midpoint", num_classes=1)
+    mAP = mean_average_precision(predictions, annotations, iou_threshold=0.2, num_classes=1)
     end_time = time.time()
     print(end_time - start_time)
     print(f'* mAP@0.5 : {mAP}'
@@ -67,6 +67,6 @@ def test(model):
 if __name__ == '__main__':
 
     model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
-    # model.load_state_dict(torch.load('./test.pt'))
+    model.load_state_dict(torch.load('./test.pt'))
     model.eval()
     test(model)

@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from utils import intersection_over_union, box_giou
+from utils import bbox_iou
 from config import device
 
 class Loss(nn.Module):
@@ -9,20 +9,19 @@ class Loss(nn.Module):
         super().__init__()
         self.mse = nn.MSELoss()
         self.bce = nn.BCEWithLogitsLoss()
-        self.sigmoid = nn.Sigmoid()
 
-        self.lambda_class = 0.1
-        self.lambda_noobj = 1
-        self.lambda_obj = 0.1
-        self.lambda_bbox = 1
+        self.lambda_class = 0.243
+        self.lambda_noobj = 0.3
+        self.lambda_obj = 0.3
+        self.lambda_bbox = 0.0296
 
     def forward(self, predictions, targets, anchors):
 
-        no_object_loss = 0
-        object_loss = 0
-        box_loss = 0
-        coordinates_loss = 0
-        class_loss = 0
+        no_object_loss = torch.zeros(1, device=device)
+        object_loss = torch.zeros(1, device=device)
+        box_loss = torch.zeros(1, device=device)
+        class_loss = torch.zeros(1, device=device)
+        bs = targets[0].shape[0]
 
         for i, target in enumerate(targets):
 
@@ -35,21 +34,35 @@ class Loss(nn.Module):
             noobj = target[..., 4] == 0
 
             ### noobj loss:
-            no_object_loss += self.bce(prediction[..., 4:5][noobj], target[..., 4:5][noobj])
-
-            ### objectness loss:
-            pbox = torch.cat((prediction[..., 0:2].sigmoid(), prediction[..., 2:4].exp() * anchor), dim=-1)
-            ious = intersection_over_union(pbox[obj], target[...,0:4][obj])
-            object_loss += self.mse(prediction[..., 4:5][obj].sigmoid(), ious.detach() * target[..., 4:5][obj])
+            no_object_loss += self.bce(
+                prediction[..., 4:5][noobj],
+                target[..., 4:5][noobj]
+            )
 
             ### bbox loss
-            pxy = prediction[..., 0:2].sigmoid()  # x,y coordinates
-            twh = torch.log(1e-16 + target[..., 2:4] / anchor)
-            box_loss += self.mse(twh[obj], prediction[...,2:4][obj])
-            coordinates_loss += self.mse(target[...,0:2][obj], pxy[obj])
+            # pxy = prediction[..., 0:2].sigmoid()  # x,y coordinates
+            # pwh = prediction[...,2:4].exp() * anchor
+            # twh = target[..., 2:4] # torch.log(1e-16 + target[..., 2:4] / anchor)
+            # box_loss += self.mse(twh[obj], pwh[obj])
+            # coordinates_loss += self.mse(target[...,0:2][obj], pxy[obj])
+
+            pxy = prediction[..., 0:2].sigmoid() * 2 - 0.5
+            pwh = (prediction[..., 2:4].sigmoid() * 2) ** 2 * anchor
+            pbox = torch.cat((pxy, pwh), dim=-1)
+            ciou = bbox_iou(pbox[obj].T, target[..., 0:4][obj].T, x1y1x2y2=False, CIoU=True)
+            box_loss += (1.0 - ciou).mean()
+
+            ### objectness loss:
+            object_loss += self.mse(
+                prediction[..., 4:5][obj].sigmoid(),
+                target[..., 4:5][obj] * ciou.detach().clamp(0).unsqueeze(dim=1)
+            )
 
             ### class loss
-            class_loss += self.bce(prediction[..., 5:][obj], target[...,5:][obj])
+            class_loss += self.bce(
+                prediction[..., 5:][obj],
+                target[...,5:][obj]
+            )
 
             # print('___________________')
             # print(coordinates_loss)
@@ -59,22 +72,16 @@ class Loss(nn.Module):
             # print(class_loss)
             # print('\n')
 
-        loss = self.lambda_bbox * (coordinates_loss + box_loss) + \
-               self.lambda_noobj * no_object_loss + \
-               self.lambda_obj * object_loss + \
-               self.lambda_class * class_loss
+            box_loss *= self.lambda_bbox
+            no_object_loss *= self.lambda_noobj
+            object_loss *= self.lambda_obj
+            class_loss *= self.lambda_class
 
-        return (loss,
-                self.lambda_bbox * (coordinates_loss + box_loss),
-                self.lambda_noobj * no_object_loss,
-                self.lambda_obj * object_loss,
-                self.lambda_class * class_loss)
+        loss = box_loss + no_object_loss + object_loss + class_loss
 
-    def forward_(self, predictions, target, anchors):
-
-        return
-
-    def build_target(self, predictions, targets):
-
-        return
-
+        return (
+            loss * bs, box_loss.item(),
+            no_object_loss.item(),
+            object_loss.item(),
+            class_loss.item()
+        )
