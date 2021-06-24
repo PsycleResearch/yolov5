@@ -2,12 +2,13 @@ import cv2
 import numpy as np
 import os
 
-def horizontal_flip(p, img):
+def horizontal_flip(p, img, boxe):
     if np.random.random() > p:
+        boxe[]
         img = cv2.flip(img, 1)
     return img
 
-def vertical_flip(p, img):
+def vertical_flip(p, img, boxe):
     if np.random.random() > p:
         img = cv2.flip(img, 0)
     return img
@@ -15,7 +16,7 @@ def vertical_flip(p, img):
 def gaussian_noise(img, p, mean, sigma):
     if np.random.random() > p:
             gaussian = np.random.normal(mean, sigma, img.shape).astype('uint8')
-            image = cv2.add(img, gaussian)
+            img = cv2.add(img, gaussian)
     return img
 
 def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):

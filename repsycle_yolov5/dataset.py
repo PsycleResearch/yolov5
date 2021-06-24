@@ -21,7 +21,7 @@ class YoloDataset(Dataset):
         self.image_id = list(self.datas.keys())
         self.annotations = list(self.datas.values())
         # torch.tensor(anchors).reshape((9,2)).float()
-        self.anchors =  torch.tensor(anchors[0] + anchors[1] + anchors[2]) #
+        self.anchors =  torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
         self.C = C
         self.S = S

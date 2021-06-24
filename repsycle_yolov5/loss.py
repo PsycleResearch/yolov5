@@ -14,6 +14,7 @@ class Loss(nn.Module):
         self.lambda_noobj = 0.3
         self.lambda_obj = 0.3
         self.lambda_bbox = 0.0296
+        self.balance = [4.0, 1.0, 0.4]
 
     def forward(self, predictions, targets, anchors):
 

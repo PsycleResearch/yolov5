@@ -209,6 +209,7 @@ if __name__ == '__main__':
 
         outs = model(x)
         outsmall = outs[0].to(config.device)
+        print(outsmall.shape)
         outmedium = outs[1].to(config.device)
         outlarge = outs[2].to(config.device)
 
