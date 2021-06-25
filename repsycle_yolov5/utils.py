@@ -50,11 +50,11 @@ def preprocessing(images):
         image = torch.tensor(image).float().to(device)
     return images
 
-def plot_images(image, bboxes):
+def plot_images(image, bboxes, ):
     #image = image * 255.
     H, W, _ = image.shape
     for bboxe in bboxes:
-        x, y, w, h, o, c = bboxe
+        x, y, w, h, c = bboxe
         p1 = (int((x - w / 2) * W), int((y - h / 2) * H))
         p2 = (int((x + w / 2) * W), int((y + h / 2) * H))
         image = cv2.rectangle(image, p1, p2, color=(255, 0, 0), thickness=3)

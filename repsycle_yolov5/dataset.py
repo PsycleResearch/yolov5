@@ -10,6 +10,7 @@ import json
 import cv2
 import matplotlib.pyplot as plt
 from utils import letterbox, plot_images, cell_to_coordinates
+from augmentations import horizontal_flip, vertical_flip, gaussian_noise
 
 class YoloDataset(Dataset):
     def __init__(self, img_dir, labels, anchors, image_size, S=[80, 40, 20], C=1):
@@ -39,8 +40,12 @@ class YoloDataset(Dataset):
         bboxes = self.annotations[idx] # [x, y, w, h, class]
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
         image = cv2.resize(image, self.img_size)
+
+        image, bboxes = horizontal_flip(0.5, image, bboxes)
+        image, bboxes = vertical_flip(0.5, image, bboxes)
+        image = gaussian_noise(image, 0.5, 0, 0.5)
+
         image = image / 255.
         image = image.reshape((3, image.shape[0], image.shape[1]))
         image = torch.tensor(image).float().to(config.device)
