@@ -65,18 +65,18 @@ class Loss(nn.Module):
                 target[...,5:][obj]
             )
 
-            # print('___________________')
-            # print(coordinates_loss)
-            # print(no_object_loss)
-            # print(object_loss)
-            # print(box_loss)
-            # print(class_loss)
-            # print('\n')
+            print('___________________')
+            print(no_object_loss)
+            print(object_loss)
+            print(box_loss)
+            print(class_loss)
+            print('\n')
 
-            box_loss *= self.lambda_bbox
-            no_object_loss *= self.lambda_noobj
-            object_loss *= self.lambda_obj
-            class_loss *= self.lambda_class
+
+            box_loss *= self.lambda_bbox * 1/3
+            no_object_loss *= self.lambda_noobj * 1/3
+            object_loss *= self.lambda_obj * 1/3
+            class_loss *= self.lambda_class * 1/3
 
         loss = box_loss + no_object_loss + object_loss + class_loss
 

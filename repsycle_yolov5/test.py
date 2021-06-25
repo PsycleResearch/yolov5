@@ -11,7 +11,7 @@ import config
 from processing import letterbox
 import cv2
 import json
-from utils import plot_images, non_max_suppression, pred2bboxes__, mean_average_precision, cell_to_coordinates
+from utils import plot_images, non_max_suppression, pred2bboxes, mean_average_precision, cell_to_coordinates
 from dataset import YoloDataset
 import time
 
@@ -25,7 +25,7 @@ def evaluate_model(model, scaled_anchors, image_dir, labels_path):
 def test(model):
 
     img_dir = './images/'
-    training_labels = './datas/training_set.json'
+    training_labels = './datas/validation_set.json'
 
     training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
 
@@ -45,14 +45,14 @@ def test(model):
         start_time = time.time()
         img = img.unsqueeze(0)
         prediction = model(img)
-        prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.2, threshold=0.5)
+        prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.2, threshold=0.6)
 
         annotations[str(idx)] = bboxes
         predictions[str(idx)] = prediction
 
         end_time = time.time()
 
-        # plot_images(np.asarray(img.to('cpu')).reshape((640, 640, 3)), prediction)
+        plot_images(np.asarray(img.to('cpu')).reshape((640, 640, 3)), prediction)
         average_inference_time.append(end_time - start_time)
 
     average_inference_time = sum(average_inference_time) / len(average_inference_time)
