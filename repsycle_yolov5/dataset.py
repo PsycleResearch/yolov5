@@ -13,7 +13,9 @@ from utils import letterbox, plot_images, cell_to_coordinates
 from augmentations import horizontal_flip, vertical_flip, gaussian_noise
 
 class YoloDataset(Dataset):
-    def __init__(self, img_dir, labels, anchors, image_size, S=[80, 40, 20], C=1):
+    def __init__(self, img_dir, labels, anchors, image_size, S=[80, 40, 20], C=1, augmentation=False):
+
+        self.augmentation = augmentation
 
         with open(labels, 'r') as f:
             self.datas = json.load(f)
@@ -42,9 +44,11 @@ class YoloDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = cv2.resize(image, self.img_size)
 
-        image, bboxes = horizontal_flip(0.5, image, bboxes)
-        image, bboxes = vertical_flip(0.5, image, bboxes)
-        image = gaussian_noise(image, 0.5, 0, 0.5)
+
+        if self.augmentation:
+            image, bboxes = horizontal_flip(0.5, image, bboxes)
+            image, bboxes = vertical_flip(0.5, image, bboxes)
+            image = gaussian_noise(image, 0.5, 0, 0.5)
 
         image = image / 255.
         image = image.reshape((3, image.shape[0], image.shape[1]))
@@ -105,7 +109,7 @@ class YoloDataset(Dataset):
 
         #print(targets[0][1,...,5:].shape)
 
-        return image, tuple(targets), bboxes
+        return image, tuple(targets), tuple(bboxes)
 
 def test():
 

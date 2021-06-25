@@ -57,8 +57,8 @@ def train(model, epochs):
 
     #anchors = autoanchors(training_labels)
 
-    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
-    validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes)
+    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes, augmentation=True)
+    validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes, augmentation=False)
 
     scaled_anchors = torch.tensor(config.anchors) * \
                      torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
