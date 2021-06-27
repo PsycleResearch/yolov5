@@ -11,10 +11,10 @@ class Loss(nn.Module):
         self.bce = nn.BCEWithLogitsLoss()
 
         self.lambda_class = 0.243
-        self.lambda_noobj = 0.3
-        self.lambda_obj = 0.3
+        self.lambda_noobj = 1
+        self.lambda_obj = 0.5 #0.3
         self.lambda_bbox = 0.0296
-        self.balance = [4.0, 1.0, 0.4]
+        self.balance = [4.0, 2.0, 1.0]
 
     def forward(self, predictions, targets, anchors):
 
@@ -33,7 +33,7 @@ class Loss(nn.Module):
 
             obj = target[..., 4] == 1
             noobj = target[..., 4] == 0
-
+            #print(prediction[..., 4:5][noobj].sigmoid())
             ### noobj loss:
             no_object_loss += self.bce(
                 prediction[..., 4:5][noobj],
@@ -54,8 +54,8 @@ class Loss(nn.Module):
             box_loss += (1.0 - ciou).mean()
 
             ### objectness loss:
-            object_loss += self.mse(
-                prediction[..., 4:5][obj].sigmoid(),
+            object_loss += self.bce(
+                prediction[..., 4:5][obj],
                 target[..., 4:5][obj] * ciou.detach().clamp(0).unsqueeze(dim=1)
             )
 
@@ -65,21 +65,21 @@ class Loss(nn.Module):
                 target[...,5:][obj]
             )
 
-            print('___________________')
-            print(no_object_loss)
-            print(object_loss)
-            print(box_loss)
-            print(class_loss)
-            print('\n')
+            # print('___________________')
+            # print(no_object_loss)
+            # print(object_loss)
+            # print(box_loss)
+            # print(class_loss)
+            # print('\n')
 
 
             box_loss *= self.lambda_bbox * 1/3
-            no_object_loss *= self.lambda_noobj * 1/3
+            no_object_loss *= self.lambda_noobj * 1/3 * self.balance[i]
             object_loss *= self.lambda_obj * 1/3
             class_loss *= self.lambda_class * 1/3
 
         loss = box_loss + no_object_loss + object_loss + class_loss
-
+        #*
         return (
             loss * bs, box_loss.item(),
             no_object_loss.item(),

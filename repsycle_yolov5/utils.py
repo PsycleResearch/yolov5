@@ -178,8 +178,9 @@ def pred2bboxes(y, threshold, scaled_anchors):
             py = ((cell_i + (y[p][..., 1][masked_objectness].sigmoid() * 2 - 0.5)) * S)
             pw = ((y[p][..., 2][masked_objectness].sigmoid() * 2) ** 2 * scaled_anchors[p, d, 0] * S)
             ph = ((y[p][..., 3][masked_objectness].sigmoid() * 2) ** 2 * scaled_anchors[p, d, 1] * S)
-            o = objectness[masked_objectness]
             c = torch.argmax(y[p][..., 5:][masked_objectness], axis=-1)
+            o = torch.max(torch.max(y[p][..., 5:][masked_objectness].sigmoid(), axis=-1)[0]) * objectness[masked_objectness]
+
             predictions.append(torch.stack((px, py, pw, ph, o, c)).T.tolist())
 
     flatten_pred = []
@@ -206,7 +207,7 @@ def non_max_suppression(target, scaled_anchors, iou_threshold, threshold):
 
     from torchvision.ops import nms
     bboxes = pred2bboxes(target, threshold, scaled_anchors)
-
+    print(len(np.asarray(bboxes)))
     if len(bboxes) == 0:
         return []
 

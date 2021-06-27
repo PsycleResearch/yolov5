@@ -36,7 +36,6 @@ def eval(model, eval_dataset, scaled_anchors):
             prediction = model(img)
 
         prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.2, threshold=0.5)
-
         predictions[str(i)] = prediction
         annotations[str(i)] = bboxe
 
@@ -53,11 +52,11 @@ def train(model, epochs):
 
     img_dir = './images/'
     training_labels = './datas/training_set.json'
-    validation_labels = './datas/validation_set.json'
+    validation_labels = './datas/training_set.json'
 
     #anchors = autoanchors(training_labels)
 
-    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes, augmentation=True)
+    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes, augmentation=False)
     validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes, augmentation=False)
 
     scaled_anchors = torch.tensor(config.anchors) * \
