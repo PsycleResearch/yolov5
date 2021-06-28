@@ -21,8 +21,8 @@ class YoloDataset(Dataset):
             self.datas = json.load(f)
 
         self.img_size = image_size
-        self.image_id = list(self.datas.keys())[:6]
-        self.annotations = list(self.datas.values())[:6]
+        self.image_id = list(self.datas.keys())
+        self.annotations = list(self.datas.values())
         # torch.tensor(anchors).reshape((9,2)).float()
         self.anchors =  torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
@@ -38,7 +38,7 @@ class YoloDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        img_path = self.img_dir + self.image_id[idx] + '.jpeg'
+        img_path = self.img_dir + self.image_id[idx] + '.bmp'
         bboxes = self.annotations[idx] # [x, y, w, h, class]
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -109,7 +109,7 @@ class YoloDataset(Dataset):
 
         #print(targets[0][1,...,5:].shape)
 
-        return image, tuple(targets), tuple(bboxes)
+        return image, tuple(targets), self.image_id[idx]
 
 def test():
 

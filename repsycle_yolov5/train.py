@@ -29,7 +29,12 @@ def eval(model, eval_dataset, scaled_anchors):
 
     model.eval()
 
-    for i, (img, label, bboxe) in enumerate(eval_dataset):
+    with open('datas/validation_set.json', 'r') as f:
+        import json
+        f = json.load(f)
+
+    for i, (img, label, img_id) in enumerate(eval_dataset):
+        print(img_id)
         img = img.unsqueeze(dim=0)
 
         with torch.no_grad():
@@ -37,9 +42,9 @@ def eval(model, eval_dataset, scaled_anchors):
 
         prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.2, threshold=0.5)
         predictions[str(i)] = prediction
-        annotations[str(i)] = bboxe
+        annotations[str(i)] = f[img_id]
 
-    mAP, precision, recall = mean_average_precision(predictions, annotations, iou_threshold=0.6, num_classes=1)
+    mAP, precision, recall = mean_average_precision(predictions, annotations, iou_threshold=0.6, num_classes=config.nb_classes)
 
     print(f'mAP : {mAP} | precision {precision} | recall {recall}')
 
@@ -51,8 +56,8 @@ def train(model, epochs):
     model.train()
 
     img_dir = './images/'
-    training_labels = './datas/training_set.json'
-    validation_labels = './datas/training_set.json'
+    training_labels = './datas/validation_set.json'
+    validation_labels = './datas/validation_set.json'
 
     #anchors = autoanchors(training_labels)
 
@@ -80,7 +85,7 @@ def train(model, epochs):
 
         model.train()
 
-        for img, target, bboxe in tqdm(loader):
+        for img, target, img_id in tqdm(loader):
 
             with torch.cuda.amp.autocast():
                 x = model(img)
@@ -108,7 +113,7 @@ def train(model, epochs):
 if __name__ == '__main__':
 
     # model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
-    model = create('yolov5s.pt', channels=3, classes=1, anchors=config.anchors)
-    epochs = 1000
+    model = create('yolov5s.pt', channels=3, classes=config.nb_classes, anchors=config.anchors)
+    epochs = 150
     train(model, epochs)
     # torch.save(model.state_dict(), 'test.pt')

@@ -11,8 +11,8 @@ class Loss(nn.Module):
         self.bce = nn.BCEWithLogitsLoss()
 
         self.lambda_class = 0.243
-        self.lambda_noobj = 1
-        self.lambda_obj = 0.5 #0.3
+        self.lambda_noobj = 0.5
+        self.lambda_obj = 0.15
         self.lambda_bbox = 0.0296
         self.balance = [4.0, 2.0, 1.0]
 
@@ -79,7 +79,7 @@ class Loss(nn.Module):
             class_loss *= self.lambda_class * 1/3
 
         loss = box_loss + no_object_loss + object_loss + class_loss
-        #*
+
         return (
             loss * bs, box_loss.item(),
             no_object_loss.item(),

@@ -6,7 +6,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Image size / stride = nb_pixel per cell for three yolo scales
 scales = [image_size // 8, image_size // 16, image_size // 32]
 
-nb_classes = 1
+nb_classes = 5
 
 anchors = [
         [(0.28, 0.22), (0.38, 0.48), (0.9, 0.78)], #/8
