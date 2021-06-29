@@ -54,7 +54,7 @@ def plot_images(image, bboxes, ):
     #image = image * 255.
     H, W, _ = image.shape
     for bboxe in bboxes:
-        x, y, w, h, c = bboxe
+        x, y, w, h, o, c = bboxe
         p1 = (int((x - w / 2) * W), int((y - h / 2) * H))
         p2 = (int((x + w / 2) * W), int((y + h / 2) * H))
         image = cv2.rectangle(image, p1, p2, color=(255, 0, 0), thickness=3)
@@ -207,7 +207,6 @@ def non_max_suppression(target, scaled_anchors, iou_threshold, threshold):
 
     from torchvision.ops import nms
     bboxes = pred2bboxes(target, threshold, scaled_anchors)
-    print(len(np.asarray(bboxes)))
     if len(bboxes) == 0:
         return []
 
@@ -239,9 +238,6 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, num_classe
         precision = []
         recall = []
 
-        max_iou = 0
-        max_idx = 0
-
         used_true_boxes = []
         filtered_true_boxes = [boxes for boxes in flatten_true_boxes if int(boxes[5]) == c]
         filtered_pred_boxes = [boxes for boxes in flatten_pred_boxes if int(boxes[6]) == c]
@@ -249,6 +245,9 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, num_classe
         sorted_pred_boxes = sorted(filtered_pred_boxes, key=lambda x: x[5], reverse=True)
 
         for sorted_pred_boxe in sorted_pred_boxes:
+
+            max_iou = 0
+            max_idx = 0
 
             current_true_boxes = [boxe for boxe in filtered_true_boxes if boxe[0] == sorted_pred_boxe[0]]
 

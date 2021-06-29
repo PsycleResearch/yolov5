@@ -63,7 +63,7 @@ if __name__ == '__main__':
 
     for i, (img_id, boxes) in enumerate(annotations.items()):
 
-        img = cv2.imread(f'{img_path}/{img_id}.jpeg')
+        img = cv2.imread(f'{img_path}/{img_id}.bmp')
 
         img, boxes = horizontal_flip(0.5, img, boxes)
         img, boxes = vertical_flip(0.5, img, boxes)

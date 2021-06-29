@@ -34,7 +34,6 @@ def eval(model, eval_dataset, scaled_anchors):
         f = json.load(f)
 
     for i, (img, label, img_id) in enumerate(eval_dataset):
-        print(img_id)
         img = img.unsqueeze(dim=0)
 
         with torch.no_grad():
@@ -71,7 +70,7 @@ def train(model, epochs):
     loader = DataLoader(training_dataset, batch_size=6, num_workers=0, shuffle=True)
 
     #optimizer = optim.Adam(model.parameters(), lr=0.0032)
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
     compute_loss = Loss()
 
@@ -112,7 +111,7 @@ def train(model, epochs):
 
 if __name__ == '__main__':
 
-    # model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
+    #model = Model(anchors=config.anchors, nb_classes=config.nb_classes, nb_channels=3)
     model = create('yolov5s.pt', channels=3, classes=config.nb_classes, anchors=config.anchors)
     epochs = 150
     train(model, epochs)

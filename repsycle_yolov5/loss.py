@@ -10,11 +10,11 @@ class Loss(nn.Module):
         self.mse = nn.MSELoss()
         self.bce = nn.BCEWithLogitsLoss()
 
-        self.lambda_class = 0.243
-        self.lambda_noobj = 0.5
-        self.lambda_obj = 0.15
-        self.lambda_bbox = 0.0296
-        self.balance = [4.0, 2.0, 1.0]
+        self.lambda_class = 0.03125
+        self.lambda_noobj = 1
+        self.lambda_obj = 1
+        self.lambda_bbox = 0.05
+        self.balance = [4.0, 1.0, 0.4]
 
     def forward(self, predictions, targets, anchors):
 
@@ -75,7 +75,7 @@ class Loss(nn.Module):
 
             box_loss *= self.lambda_bbox * 1/3
             no_object_loss *= self.lambda_noobj * 1/3 * self.balance[i]
-            object_loss *= self.lambda_obj * 1/3
+            object_loss *= self.lambda_obj * 1/3 * self.balance[i]
             class_loss *= self.lambda_class * 1/3
 
         loss = box_loss + no_object_loss + object_loss + class_loss

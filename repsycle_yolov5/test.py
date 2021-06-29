@@ -40,14 +40,17 @@ def test(model):
     annotations = {}
     predictions = {}
 
-    for idx, (img, label, bboxes) in enumerate(training_dataset):
+    with open('datas/validation_set.json', 'r') as f:
+        f = json.load(f)
+
+    for idx, (img, label, key) in enumerate(training_dataset):
 
         start_time = time.time()
         img = img.unsqueeze(0)
         prediction = model(img)
         prediction = non_max_suppression(prediction, scaled_anchors, iou_threshold=0.2, threshold=0.6)
 
-        annotations[str(idx)] = bboxes
+        annotations[str(idx)] = f[key]
         predictions[str(idx)] = prediction
 
         end_time = time.time()

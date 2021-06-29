@@ -31,13 +31,13 @@ class Model(torch.nn.Module):
 
         self.conv4 = Conv(512 // cd, 1024 // cd, 3, 2)
         self.spp = SPP(1024 // cd , 1024 // cd)
-        self.csp4 = BottleneckCSP(1024 // cd , 1024 // cd, n = 3 // wd, shortcut=False)
+        self.csp4 = BottleneckCSP(1024 // cd , 1024 // cd, n = 3 // wd, shortcut=True)
 
         # Neck : PANet : https://arxiv.org/abs/1803.01534
 
         self.conv5 = Conv(1024 // cd, 512 // cd)
         self.up1 = nn.Upsample(scale_factor=2)
-        self.csp5 = BottleneckCSP(1024 // cd, 512 // cd, n = 3 // cd, shortcut=False)
+        self.csp5 = BottleneckCSP(1024 // cd, 512 // cd, n = 3 // cd, shortcut=True)
 
         self.conv6 = Conv(512 // cd, 256 // cd)
         self.up2 = nn.Upsample(scale_factor=2)
