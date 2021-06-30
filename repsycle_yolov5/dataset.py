@@ -20,9 +20,10 @@ class YoloDataset(Dataset):
         with open(labels, 'r') as f:
             self.datas = json.load(f)
 
-        self.img_size = image_size
-        self.image_id = list(self.datas.keys())[:6]
-        self.annotations = list(self.datas.values())[:6]
+        self.img_size = (image_size, image_size)
+        self.image_id = list(self.datas.keys())
+        self.annotations = list(self.datas.values())
+
         # torch.tensor(anchors).reshape((9,2)).float()
         self.anchors =  torch.tensor(anchors[0] + anchors[1] + anchors[2])
         self.nb_anchors = self.anchors.shape[0]
@@ -44,11 +45,10 @@ class YoloDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = cv2.resize(image, self.img_size)
 
-
-        if self.augmentation:
-            image, bboxes = horizontal_flip(0.5, image, bboxes)
-            image, bboxes = vertical_flip(0.5, image, bboxes)
-            image = gaussian_noise(image, 0.5, 0, 0.5)
+        # if self.augmentation:
+        #     image, bboxes = horizontal_flip(0.5, image, bboxes)
+        #     image, bboxes = vertical_flip(0.5, image, bboxes)
+        #     image = gaussian_noise(image, 0.5, 0, 0.5)
 
         image = image / 255.
         image = image.reshape((3, image.shape[0], image.shape[1]))
@@ -79,8 +79,10 @@ class YoloDataset(Dataset):
 
                 # It's possible but rare that two objects with same bbox are taken
                 anchor_taken = targets[scale_idx][anchor_on_scale, i, j, 4]
+                #print(anchor_taken)
 
                 if not anchor_taken and not has_anchor[scale_idx]:
+
                     targets[scale_idx][anchor_on_scale, i, j, 4] = 1
                     x_cell, y_cell = S*x - j, S*y - i
                     width_cell, height_cell = width * S, height * S
@@ -89,7 +91,7 @@ class YoloDataset(Dataset):
 
                     targets[scale_idx][anchor_on_scale, i, j, 0:4] = box_coordinates
                     one_hot_class = torch.zeros(self.C)
-                    one_hot_class[int(class_label)] = 1
+                    one_hot_class[class_label] = 1
                     targets[scale_idx][anchor_on_scale, i, j, 5:] = one_hot_class
                     has_anchor[scale_idx] = True
 
@@ -106,7 +108,6 @@ class YoloDataset(Dataset):
         #         plt.matshow(targets[i][j, :, :, 4])
         #         plt.show()
         # print(bboxe)
-
         #print(targets[0][1,...,5:].shape)
 
         return image, tuple(targets), self.image_id[idx]
@@ -114,11 +115,11 @@ class YoloDataset(Dataset):
 def test():
 
     img_dir = './images/'
-    labels = './datas/temp.json'
-    ds = YoloDataset(img_dir, labels, anchors=config.anchors, image_size=(config.image_size, config.image_size))
+    labels = './datas/training_set.json'
+    ds = YoloDataset(img_dir, labels, anchors=config.anchors, C=config.nb_classes, image_size=config.image_size)
 
-    for img, targets in ds:
-        labels = cell_to_coordinates(img, targets)
+    for img, targets, key in ds:
+        labels = cell_to_coordinates(targets)
         plot_images(img, labels)
 
 if __name__ == '__main__':

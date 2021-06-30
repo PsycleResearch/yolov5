@@ -50,18 +50,19 @@ def preprocessing(images):
         image = torch.tensor(image).float().to(device)
     return images
 
-def plot_images(image, bboxes, ):
-    #image = image * 255.
-    H, W, _ = image.shape
+def plot_images(image, bboxes):
+
+    _, H, W = image.shape
+    image = image.cpu().detach().numpy()
+
     for bboxe in bboxes:
-        x, y, w, h, o, c = bboxe
+        x, y, w, h, c = bboxe
         p1 = (int((x - w / 2) * W), int((y - h / 2) * H))
         p2 = (int((x + w / 2) * W), int((y + h / 2) * H))
-        image = cv2.rectangle(image, p1, p2, color=(255, 0, 0), thickness=3)
-
-    plt.figure(figsize = (20, 20))
-    plt.imshow(image)
-    plt.show()
+        boxed_img = cv2.rectangle(image.reshape(640, 640, 3), p1, p2, color=(255, 0, 0), thickness=3)
+        plt.figure(figsize = (20, 20))
+        plt.imshow(boxed_img)
+        plt.show()
 
 def cell_to_coordinates(targets):
 
@@ -174,8 +175,8 @@ def pred2bboxes(y, threshold, scaled_anchors):
 
             _, d, cell_i, cell_j = torch.nonzero(masked_objectness, as_tuple=True)
 
-            px = ((cell_j + (y[p][..., 0][masked_objectness].sigmoid() * 2 - 0.5)) * S)
-            py = ((cell_i + (y[p][..., 1][masked_objectness].sigmoid() * 2 - 0.5)) * S)
+            px = ((cell_j + (y[p][..., 0][masked_objectness].sigmoid())) * S) # * 2 - 0.5
+            py = ((cell_i + (y[p][..., 1][masked_objectness].sigmoid())) * S) # * 2 - 0.5
             pw = ((y[p][..., 2][masked_objectness].sigmoid() * 2) ** 2 * scaled_anchors[p, d, 0] * S)
             ph = ((y[p][..., 3][masked_objectness].sigmoid() * 2) ** 2 * scaled_anchors[p, d, 1] * S)
             c = torch.argmax(y[p][..., 5:][masked_objectness], axis=-1)

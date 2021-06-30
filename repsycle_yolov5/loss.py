@@ -11,17 +11,17 @@ class Loss(nn.Module):
         self.bce = nn.BCEWithLogitsLoss()
 
         self.lambda_class = 0.03125
-        self.lambda_noobj = 1
-        self.lambda_obj = 1
-        self.lambda_bbox = 0.05
+        self.lambda_noobj = 0.5
+        self.lambda_obj = 0.15
+        self.lambda_bbox = 0.1
         self.balance = [4.0, 1.0, 0.4]
 
     def forward(self, predictions, targets, anchors):
 
-        no_object_loss = torch.zeros(1, device=device)
-        object_loss = torch.zeros(1, device=device)
-        box_loss = torch.zeros(1, device=device)
-        class_loss = torch.zeros(1, device=device)
+        no_object_loss = torch.tensor(0, device=device).float()
+        object_loss = torch.tensor(0, device=device).float()
+        box_loss = torch.tensor(0, device=device).float()
+        class_loss = torch.tensor(0, device=device).float()
         bs = targets[0].shape[0]
 
         for i, target in enumerate(targets):
@@ -33,21 +33,14 @@ class Loss(nn.Module):
 
             obj = target[..., 4] == 1
             noobj = target[..., 4] == 0
-            #print(prediction[..., 4:5][noobj].sigmoid())
+
             ### noobj loss:
             no_object_loss += self.bce(
                 prediction[..., 4:5][noobj],
                 target[..., 4:5][noobj]
-            )
+            ) * self.balance[i]
 
-            ### bbox loss
-            # pxy = prediction[..., 0:2].sigmoid()  # x,y coordinates
-            # pwh = prediction[...,2:4].exp() * anchor
-            # twh = target[..., 2:4] # torch.log(1e-16 + target[..., 2:4] / anchor)
-            # box_loss += self.mse(twh[obj], pwh[obj])
-            # coordinates_loss += self.mse(target[...,0:2][obj], pxy[obj])
-
-            pxy = prediction[..., 0:2].sigmoid() * 2 - 0.5
+            pxy = prediction[..., 0:2].sigmoid() #* 2 - 0.5
             pwh = (prediction[..., 2:4].sigmoid() * 2) ** 2 * anchor
             pbox = torch.cat((pxy, pwh), dim=-1)
             ciou = bbox_iou(pbox[obj].T, target[..., 0:4][obj].T, x1y1x2y2=False, CIoU=True)
@@ -57,7 +50,7 @@ class Loss(nn.Module):
             object_loss += self.bce(
                 prediction[..., 4:5][obj],
                 target[..., 4:5][obj] * ciou.detach().clamp(0).unsqueeze(dim=1)
-            )
+            ) * self.balance[i]
 
             ### class loss
             class_loss += self.bce(
@@ -72,11 +65,10 @@ class Loss(nn.Module):
             # print(class_loss)
             # print('\n')
 
-
-            box_loss *= self.lambda_bbox * 1/3
-            no_object_loss *= self.lambda_noobj * 1/3 * self.balance[i]
-            object_loss *= self.lambda_obj * 1/3 * self.balance[i]
-            class_loss *= self.lambda_class * 1/3
+        box_loss *= self.lambda_bbox * 1/3
+        no_object_loss *= self.lambda_noobj * 1/3
+        object_loss *= self.lambda_obj * 1/3
+        class_loss *= self.lambda_class * 1/3
 
         loss = box_loss + no_object_loss + object_loss + class_loss
 

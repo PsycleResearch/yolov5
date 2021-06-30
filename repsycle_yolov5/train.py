@@ -60,8 +60,8 @@ def train(model, epochs):
 
     #anchors = autoanchors(training_labels)
 
-    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes, augmentation=False)
-    validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, (config.image_size, config.image_size), C=config.nb_classes, augmentation=False)
+    training_dataset = YoloDataset(img_dir, training_labels, config.anchors, config.image_size, C=config.nb_classes, augmentation=False)
+    validation_dataset = YoloDataset(img_dir, validation_labels, config.anchors, config.image_size, C=config.nb_classes, augmentation=False)
 
     scaled_anchors = torch.tensor(config.anchors) * \
                      torch.tensor(config.scales).unsqueeze(1).unsqueeze(1).repeat(1, 3, 2)
@@ -70,7 +70,7 @@ def train(model, epochs):
     loader = DataLoader(training_dataset, batch_size=6, num_workers=0, shuffle=True)
 
     #optimizer = optim.Adam(model.parameters(), lr=0.0032)
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     compute_loss = Loss()
 
